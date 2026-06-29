@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+/* ───────────────────────────────────────────────────────────────
+   Lakepointe Gotham web fonts — self-hosted, brand-dark.
+   LICENSE: @font-face is *web* embedding and requires a Gotham web
+   license (separate from desktop/print). The team has confirmed a
+   web license is held. If that ever changes, the fallback stack on
+   --font-gotham degrades to system fonts.
+   ─────────────────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Book.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gotham";
+  src: url("/fonts/Gotham-Black.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ───────────────────────────────────────────────────────────────
+   Brand tokens (Tailwind v4 @theme) — lp-* namespaced so they never
+   collide with Tailwind defaults. Orange is the only pop color;
+   slate is the single secondary. No gold, no rainbow source colors.
+   ─────────────────────────────────────────────────────────────── */
+@theme {
+  --color-lp-orange: #f04b28; /* accent / pop — use sparingly */
+  --color-lp-gray: #323232; /* dark base, structure */
+  --color-lp-taupe: #ded7cc; /* warm neutral / softer text in dark mode */
+  --color-lp-slate: #7aa3aa; /* complementary support color */
+
+  /* Lifted card surface + hairline border, brand-dark. */
+  --color-lp-surface: #3c3c3c;
+
+  --font-gotham: "Gotham", "Futura", "Avenir", "Century Gothic",
+    "Helvetica Neue", Helvetica, Calibri, system-ui, sans-serif;
+}
+
+/* Tailwind v4's preflight (in @layer base) already resets margins and sets
+   box-sizing. A custom unlayered reset here would override every Tailwind
+   spacing utility (unlayered CSS beats @layer utilities), so we don't add one. */
+
+body {
+  background: #323232;
+  color: #ded7cc;
+  font-family: var(--font-gotham);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle orange wash from the top — brand-dark, rationed. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      rgba(240, 75, 40, 0.06) 0%,
+      transparent 60%
+    ),
+    linear-gradient(180deg, #383838 0%, #323232 22%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Placeholder shimmer — signals "awaiting data", never reads as a zero. */
+@keyframes lp-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.lp-awaiting-dot {
+  animation: lp-pulse 2s ease-in-out infinite;
+}
