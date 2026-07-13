@@ -24,10 +24,22 @@ import { fetchGdeltArticles, parseSeendate } from "./gdelt-client";
 export const gdeltPoller: Poller = {
   id: "gdelt",
   label: "GDELT",
+  // Worst case = every keyword needs its one 20s 429 retry (see gdelt-client).
+  budgetMs: 120_000,
   async run() {
     const out: MentionInput[] = [];
     for (const keyword of KEYWORDS) {
-      const articles = await fetchGdeltArticles(keyword);
+      let articles;
+      try {
+        articles = await fetchGdeltArticles(keyword);
+      } catch (err) {
+        // Persistent 429 mid-sweep: keep the keywords already fetched
+        // (partial success is success) and fail loudly for the run.
+        return {
+          mentions: out,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
       for (const a of articles) {
         if (!a.url) continue;
         out.push({
@@ -42,6 +54,6 @@ export const gdeltPoller: Poller = {
         });
       }
     }
-    return out;
+    return { mentions: out };
   },
 };

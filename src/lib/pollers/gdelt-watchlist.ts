@@ -40,8 +40,8 @@ function isParseRejection(err: unknown): boolean {
 export const gdeltWatchlistPoller: Poller = {
   id: "gdelt_watchlist",
   label: "GDELT Watchlist",
-  // Worst case (adaptive splitting kicks in) needs more than the default 60s
-  // at ≥5.5s per call; the whole run still sits far under the 300s cron cap.
+  // Worst case (429 retries and/or adaptive splitting) needs more than the
+  // default 60s at ≥5.5s per call; the run still sits under the 300s cap.
   budgetMs: 150_000,
   async run() {
     const out: MentionInput[] = [];
@@ -62,7 +62,12 @@ export const gdeltWatchlistPoller: Poller = {
           queue.unshift(batch.slice(0, mid), batch.slice(mid));
           continue;
         }
-        throw err; // rate limit, floor-size rejection, or anything else: loud
+        // Persistent 429 (or floor-size rejection) mid-sweep: keep the
+        // batches already fetched, fail loudly for the run.
+        return {
+          mentions: out,
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
 
       for (const a of articles) {
@@ -79,6 +84,6 @@ export const gdeltWatchlistPoller: Poller = {
         });
       }
     }
-    return out;
+    return { mentions: out };
   },
 };

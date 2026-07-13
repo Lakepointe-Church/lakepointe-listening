@@ -14,7 +14,17 @@ export const youtubePoller: Poller = {
   async run() {
     const out: MentionInput[] = [];
     for (const keyword of KEYWORDS) {
-      const items = await fetchYouTubeVideos(keyword);
+      let items;
+      try {
+        items = await fetchYouTubeVideos(keyword);
+      } catch (err) {
+        // e.g. quota exhausted mid-sweep: keep earlier keywords' results,
+        // fail loudly for the run.
+        return {
+          mentions: out,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
       for (const item of items) {
         const videoId = item.id?.videoId;
         if (!videoId) continue;
@@ -32,6 +42,6 @@ export const youtubePoller: Poller = {
         });
       }
     }
-    return out;
+    return { mentions: out };
   },
 };

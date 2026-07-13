@@ -69,6 +69,6 @@ export const redditPoller: Poller = {
         published_at: new Date(publishedAt).toISOString(),
       });
     }
-    return out;
+    return { mentions: out };
   },
 };

@@ -35,27 +35,24 @@ export async function runPoll(): Promise<{ results: SourceResult[] }> {
   for (const poller of POLLERS) {
     const started = Date.now();
     try {
-      const mentions = await withBudget(
+      const outcome = await withBudget(
         poller.run(),
         poller.budgetMs ?? PER_SOURCE_BUDGET_MS,
         poller.label,
       );
-      const newCount = await insertMentions(mentions);
+      // Insert whatever the poller fetched even when it reported an error —
+      // partial success is success; the error still gets a loud poll_run.
+      const newCount = await insertMentions(outcome.mentions);
       const duration_ms = Date.now() - started;
-      await recordPollRun({
+      const result: SourceResult = {
         source: poller.id,
-        status: "ok",
+        status: outcome.error ? "error" : "ok",
         new_mentions: newCount,
-        error_message: null,
+        error_message: outcome.error ?? null,
         duration_ms,
-      });
-      results.push({
-        source: poller.id,
-        status: "ok",
-        new_mentions: newCount,
-        error_message: null,
-        duration_ms,
-      });
+      };
+      await recordPollRun(result);
+      results.push(result);
     } catch (err) {
       const duration_ms = Date.now() - started;
       const error_message = err instanceof Error ? err.message : String(err);

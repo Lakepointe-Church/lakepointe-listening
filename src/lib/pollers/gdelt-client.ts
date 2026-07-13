@@ -39,40 +39,61 @@ export type GdeltArticle = {
 };
 
 /**
- * One spaced, single-attempt GDELT artlist call over a 2-day window.
- * Empty result comes back as a bare `{}` (no `articles` key) — mapped to
- * `[]`, not an error. Throws GdeltRateLimitError on 429, a plain Error on
+ * One 429 retry per call, after a polite pause. DEVIATION from REV4's "on
+ * 429 stop GDELT for this run", flagged per its own Section 10 (reality
+ * wins): both deployed runs (July 13, 2026) showed the 429s are collisions
+ * with OTHER tenants on Vercel's shared egress IP — one run 429'd on call 1
+ * but succeeded on call 2, the next succeeded on call 1 and 429'd on call 2.
+ * Our own spacing is already ≥5.5s. A single ~20s-later retry per call turns
+ * that per-call coin flip into a mostly-reliable daily run; a second 429
+ * still aborts the sweep loudly. This is one polite retry, never a hammer.
+ */
+const RETRY_AFTER_429_MS = 20_000;
+
+/**
+ * One spaced GDELT artlist call over a 2-day window, with a single spaced
+ * retry if the shared-IP 429 lottery strikes (see above). Empty result comes
+ * back as a bare `{}` (no `articles` key) — mapped to `[]`, not an error.
+ * Throws GdeltRateLimitError on a second consecutive 429, a plain Error on
  * any other failure (non-OK HTTP, non-JSON body).
  */
 export async function fetchGdeltArticles(query: string): Promise<GdeltArticle[]> {
-  const wait = MIN_GAP_MS - (Date.now() - lastCallAt);
-  if (lastCallAt > 0 && wait > 0) await sleep(wait);
-  lastCallAt = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    const wait = MIN_GAP_MS - (Date.now() - lastCallAt);
+    if (lastCallAt > 0 && wait > 0) await sleep(wait);
+    lastCallAt = Date.now();
 
-  const url =
-    `${ENDPOINT}?query=${encodeURIComponent(query)}` +
-    `&mode=artlist&format=json&maxrecords=250&timespan=2d`;
+    const url =
+      `${ENDPOINT}?query=${encodeURIComponent(query)}` +
+      `&mode=artlist&format=json&maxrecords=250&timespan=2d`;
 
-  const res = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT },
-    cache: "no-store",
-  });
-  const body = await res.text();
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT },
+      cache: "no-store",
+    });
+    const body = await res.text();
 
-  if (res.status === 429) {
-    throw new GdeltRateLimitError(`GDELT rate limit for "${query}": ${body.slice(0, 160)}`);
+    if (res.status === 429) {
+      if (attempt === 0) {
+        await sleep(RETRY_AFTER_429_MS);
+        continue;
+      }
+      throw new GdeltRateLimitError(
+        `GDELT rate limit for "${query}" (persisted through one ${RETRY_AFTER_429_MS / 1000}s retry): ${body.slice(0, 160)}`,
+      );
+    }
+    if (!res.ok) {
+      throw new Error(`GDELT HTTP ${res.status} for "${query}": ${body.slice(0, 160)}`);
+    }
+
+    let json: { articles?: GdeltArticle[] };
+    try {
+      json = JSON.parse(body);
+    } catch {
+      throw new Error(`GDELT non-JSON response for "${query}": ${body.slice(0, 160)}`);
+    }
+    return json.articles ?? [];
   }
-  if (!res.ok) {
-    throw new Error(`GDELT HTTP ${res.status} for "${query}": ${body.slice(0, 160)}`);
-  }
-
-  let json: { articles?: GdeltArticle[] };
-  try {
-    json = JSON.parse(body);
-  } catch {
-    throw new Error(`GDELT non-JSON response for "${query}": ${body.slice(0, 160)}`);
-  }
-  return json.articles ?? [];
 }
 
 /** "20260604T223000Z" -> ISO "2026-06-04T22:30:00Z"; null if unparseable. */

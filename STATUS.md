@@ -145,14 +145,32 @@ intended). Diagnosis and outcomes:
   every page load — fresh DB had no tables since ensureSchema() only ran
   inside polls. getDashboardData now self-heals on Postgres 42P01 only.
 
-**Next action (handoff for a new session):** After the YouTube key is
-re-added and pushed changes deploy, click Refresh now again — expect GDELT
-(both sweeps) + YouTube green. Then Slice 5 wrap-up: `vercel.json` cron
-wiring + final look-over. Carried loose ends: (1) `repeat2:` query variant
-still unverified (needs a GDELT 200 from a testable vantage). (2) `npm run
-lint` fails repo-wide (pre-existing eslint-config-next circular-JSON error);
-tsc + build pass. (3) Reddit's per-feed cap note from Slice 3 is moot while
-demoted.
+**Second deployed run (2026-07-13):** YouTube fully live (53 mentions);
+Reddit demotion clean; watchlist query no longer parse-rejected (nesting fix
+verified in production — its failure became a plain 429). Both GDELT sweeps
+lost the shared-egress-IP 429 lottery, and the keyword sweep's kw-1 data was
+discarded when kw-2 threw. Two follow-up changes:
+
+- **Partial success now persists:** Poller contract returns
+  `{ mentions, error? }`; a mid-sweep failure keeps everything fetched
+  before it AND records a loud error poll_run. Orchestrator inserts before
+  checking error.
+- **One polite 429 retry (DELIBERATE REV4 DEVIATION, per its Section 10):**
+  REV4 said "on 429 stop GDELT for this run," assuming the 429 meant our own
+  rate. Both deployed runs proved the 429s are collisions with other tenants
+  on Vercel's shared egress IP (each ≥5.5s-spaced call independently wins or
+  loses). gdelt-client now retries ONCE per call after 20s; a second 429
+  aborts the sweep loudly. Never a hammer. GDELT pollers' budgets raised
+  (120s / 150s) for the retry worst case; total run stays under the 300s cap.
+
+**Next action (handoff for a new session):** Deploy + Refresh now again —
+expect all three live tiles green (GDELT may still occasionally lose the IP
+lottery twice in a row; that's the accepted residual). Then Slice 5 wrap-up:
+`vercel.json` cron wiring + final look-over. Carried loose ends: (1)
+`repeat2:` query variant still unverified (needs a GDELT 200 from a testable
+vantage). (2) `npm run lint` fails repo-wide (pre-existing eslint-config-next
+circular-JSON error); tsc + build pass. (3) Reddit's per-feed cap note from
+Slice 3 is moot while demoted.
 
 ---
 

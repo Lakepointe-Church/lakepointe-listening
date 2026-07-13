@@ -13,15 +13,27 @@ export type MentionInput = {
 };
 
 /**
- * A poller fetches from one source and returns normalized mentions. It should
- * throw on a hard failure (network error, non-OK HTTP, rate limit) so the
- * orchestrator records a loud `error` poll_run — never swallow and return [].
- * Returning an empty array means a genuine "zero new mentions".
+ * What one poller run produced. `error` set = the run FAILED loudly (the
+ * orchestrator records an `error` poll_run) — but any mentions fetched
+ * before the failure are still persisted (partial success is success).
+ * No `error` + empty mentions = a genuine "zero new mentions".
+ */
+export type PollOutcome = {
+  mentions: MentionInput[];
+  error?: string;
+};
+
+/**
+ * A poller fetches from one source and returns normalized mentions. For a
+ * mid-run failure (e.g. rate-limited on keyword 2 of 3), return the mentions
+ * collected so far WITH `error` set — never swallow the failure, and never
+ * discard already-fetched data. Throwing also records a loud error, but
+ * loses partials; prefer it only for failures where nothing was fetched.
  */
 export type Poller = {
   id: string; // matches mention.source / poll_run.source
   label: string;
   /** Overrides the orchestrator's default per-source time budget (ms). */
   budgetMs?: number;
-  run: () => Promise<MentionInput[]>;
+  run: () => Promise<PollOutcome>;
 };
