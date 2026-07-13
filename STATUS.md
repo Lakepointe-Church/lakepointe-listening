@@ -78,7 +78,29 @@ not yet committed — see handoff note below.
       Added `fast-xml-parser@5.10.0` (option names confirmed against the
       installed package's type defs, not memory). Uncommitted — same
       show-before-commit checkpoint as prior slices.
-- [ ] Slice 4 — YouTube poller. Not started.
+- [x] Slice 4 — YouTube poller, built and live-verified end-to-end this
+      session (real search.list 200s for all three keywords; 59 mentions
+      mapped cleanly, 0 rows missing required fields). Live findings:
+      - `search.list` returns HTML-escaped titles/descriptions (`&amp;`,
+        `&#39;` — 8 of 45 live titles). Decoded via the shared
+        `decodeEntities` before storing.
+      - The API returns fewer items than `maxResults` (45 of a claimed 76
+        totalResults at maxResults=50). One page only per the spec — no
+        pagination.
+      - Added `server-only` as a real dependency (Next aliases it internally,
+        but standalone test scripts need the actual package).
+      **Env-var saga, important for future sessions:** ALL env vars on this
+      Vercel project are `sensitive`-type — write-only. `vercel env pull`
+      returns empty strings for every secret BY DESIGN (this misled an
+      entire debugging session; the values were often fine). Local dev needs
+      secrets placed in `.env.local` by hand. Separately, the YouTube key in
+      the user's notes was hand-transcribed and corrupted (ALza vs AIza, plus
+      at least one more invisible typo) — the working key came from a fresh
+      copy-paste out of Google Cloud Console. ⚠️ At the time of writing, the
+      YOUTUBE_API_KEY stored on Vercel is still the corrupted notes version
+      and MUST be replaced (fresh console copy, via
+      `cat keyfile | vercel env add ...`) before the first deployed poll run.
+      Uncommitted — show-before-commit checkpoint.
 - [ ] Slice 5 — X/Meta/Web-search placeholder tiles + cron wiring. **Partially
       pre-built, uncommitted, in the working tree**: `src/app/actions.ts`,
       `src/app/api/cron/poll/route.ts`, `src/lib/poll/orchestrator.ts`, and
@@ -89,16 +111,18 @@ not yet committed — see handoff note below.
       schedule) still, and a look-over once Slices 3–4 land before committing
       as Slice 5.
 
-**Next action (handoff for a new session):** Show Slice 3 to the user, then
-start Slice 4 (YouTube poller). Two carried-forward loose ends, neither
-blocking: (1) Slice 2's GDELT output still needs a real 200 response from a
-network that isn't rate-limited, to confirm the artlist field shape and the
-`repeat2`/watchlist-batching open questions noted below. (2) `npm run lint`
-fails repo-wide with a pre-existing `TypeError: Converting circular
-structure to JSON` inside `eslint-config-next`'s flat-config loading — not
-caused by Slice 3's files (reproduces on a clean `npm run lint` with no args)
-but not yet root-caused either; `npx tsc --noEmit` and `npm run build` both
-pass clean.
+**Next action (handoff for a new session):** Show Slice 4 to the user, then
+Slice 5 (placeholder tiles exist already; remaining work = `vercel.json` cron
+wiring + final look-over). Before the first deployed poll run: the user must
+replace the corrupted YOUTUBE_API_KEY on Vercel (see Slice 4 notes). Three
+carried-forward loose ends, none blocking: (1) Slice 2's GDELT output still
+needs a real 200 response from a network that isn't rate-limited, to confirm
+the artlist field shape and the `repeat2`/watchlist-batching open questions.
+(2) `npm run lint` fails repo-wide with a pre-existing `TypeError: Converting
+circular structure to JSON` inside `eslint-config-next`'s flat-config loading
+— predates Slice 3, not yet root-caused; `npx tsc --noEmit` and `npm run
+build` both pass clean. (3) Reddit's per-feed result cap is shared across
+the OR-combined query (see Slice 3 notes).
 
 ---
 

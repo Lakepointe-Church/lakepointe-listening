@@ -7,8 +7,13 @@ const NAMED_ENTITIES: Record<string, string> = {
   nbsp: " ",
 };
 
-/** Decode numeric (&#32;, &#x20;) and the handful of named XML/HTML entities we see in Reddit content. */
-function decodeEntities(s: string): string {
+/**
+ * Decode numeric (&#32;, &#x20;) and the handful of named XML/HTML entities we
+ * see in source content. Reddit RSS uses these in post bodies; YouTube's
+ * search.list returns HTML-escaped titles/descriptions (&amp;, &#39; —
+ * confirmed live against 8 of 45 real results, July 2026).
+ */
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
