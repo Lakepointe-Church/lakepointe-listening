@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import type { MentionInput } from "./pollers/types";
+import { normalizeUrl } from "./normalizeUrl";
 
 /** Lazily build a Neon SQL client. Throws loudly if the DB URL is unset. */
 export function getDb() {
@@ -81,10 +82,10 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
 
   const inserted = (await sql.query(
     `INSERT INTO mention
-       (source, source_uid, url, title, excerpt, author, query_matched, published_at)
+       (source, source_uid, url, normalized_url, title, excerpt, author, query_matched, published_at)
      SELECT * FROM UNNEST(
        $1::text[], $2::text[], $3::text[], $4::text[],
-       $5::text[], $6::text[], $7::text[], $8::timestamptz[]
+       $5::text[], $6::text[], $7::text[], $8::text[], $9::timestamptz[]
      )
      ON CONFLICT (source, source_uid) DO NOTHING
      RETURNING id`,
@@ -92,6 +93,7 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
       rows.map((r) => r.source),
       rows.map((r) => r.source_uid),
       rows.map((r) => r.url),
+      rows.map((r) => normalizeUrl(r.url)),
       rows.map((r) => r.title),
       rows.map((r) => r.excerpt),
       rows.map((r) => r.author),
