@@ -1,4 +1,4 @@
-import { getDb, hasDb } from "./db";
+import { ensureSchema, getDb, hasDb } from "./db";
 import { SOURCES } from "@/config/sources";
 import type {
   Mention,
@@ -6,6 +6,9 @@ import type {
   SourceHealth,
   SourceHealthState,
 } from "./types";
+
+/** Postgres "undefined_table" — the one error the dashboard self-heals from. */
+const UNDEFINED_TABLE = "42P01";
 
 /** Collapse a source's most-recent poll_run into a single health state. */
 function deriveState(run: PollRun | null): SourceHealthState {
@@ -34,6 +37,34 @@ export async function getDashboardData(): Promise<{
     };
   }
 
+  let rows: { mentions: Mention[]; latestRuns: PollRun[] };
+  try {
+    rows = await readDashboard();
+  } catch (err) {
+    // Bootstrap: on a fresh database the tables don't exist until the first
+    // poll runs ensureSchema() — but the page renders (and 500s) before any
+    // poll can be triggered. Self-heal from exactly this condition and let
+    // every other error stay loud.
+    if ((err as { code?: string }).code !== UNDEFINED_TABLE) throw err;
+    await ensureSchema();
+    rows = await readDashboard();
+  }
+  const { mentions, latestRuns } = rows;
+
+  const runBySource = new Map(latestRuns.map((r) => [r.source, r]));
+  const health: SourceHealth[] = SOURCES.map((s) => {
+    const run = runBySource.get(s.id) ?? null;
+    return { source: s.id, state: deriveState(run), lastRun: run };
+  });
+
+  return { mentions, health };
+}
+
+/** The dashboard's two reads, separated so the bootstrap path can retry them. */
+async function readDashboard(): Promise<{
+  mentions: Mention[];
+  latestRuns: PollRun[];
+}> {
   const sql = getDb();
 
   const mentions = (await sql`
@@ -52,11 +83,5 @@ export async function getDashboardData(): Promise<{
     ORDER BY source, ran_at DESC
   `) as PollRun[];
 
-  const runBySource = new Map(latestRuns.map((r) => [r.source, r]));
-  const health: SourceHealth[] = SOURCES.map((s) => {
-    const run = runBySource.get(s.id) ?? null;
-    return { source: s.id, state: deriveState(run), lastRun: run };
-  });
-
-  return { mentions, health };
+  return { mentions, latestRuns };
 }
