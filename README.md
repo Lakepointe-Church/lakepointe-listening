@@ -1,8 +1,8 @@
 # Lakepointe Listening
 
 Internal brand & name monitoring dashboard. Polls free data sources for mentions
-of **"Lakepointe Church"** and **"Josh Howerton"**, normalizes them into Neon
-Postgres, and renders a brand-dark dashboard on Vercel.
+of **"Lakepointe Church"** / **"Lake Pointe Church"** and **"Josh Howerton"**,
+normalizes them into Neon Postgres, and renders a brand-dark dashboard on Vercel.
 
 ## Stack
 
@@ -14,17 +14,36 @@ Postgres, and renders a brand-dark dashboard on Vercel.
 
 | Source | Auth | Notes |
 |---|---|---|
-| GDELT DOC 2.0 | none | News/media backbone — no key, no daily cap |
-| Reddit | OAuth2 (script) | Posts/comments search, non-commercial use |
-| YouTube Data v3 | API key | `search.list`, 2 queries/day |
-| Google CSE | API key + cx | 100 queries/day |
-| X / Twitter, Meta | — | No free mention API — rendered as "not connected" |
+| GDELT keyword sweep | none | News outlets only — the tripwire backbone |
+| GDELT watchlist sweep | none | `domainis:` OR-list from the curated domain research |
+| Reddit | none (public RSS) | Posts only, via `search.rss` — self-serve OAuth apps are dead |
+| YouTube Data v3 | API key | `search.list`, 3 queries/day (one per keyword) |
+| X / Twitter, Meta, Web search | — | No free mention-search API — rendered as "not connected" |
+
+Google CSE was evaluated and dropped (Google closed the Custom Search JSON API
+to new projects) — its watchlist role is covered by the GDELT watchlist sweep.
+Open-web search beyond that is future roadmap (see the build prompt, F6).
+
+## Env vars
+
+Exactly three:
+
+- `DATABASE_URL` — Neon connection string
+- `YOUTUBE_API_KEY` — Google Cloud project `lakepointe-social-dashboard`
+- `CRON_SECRET` — guards the poll route
+
+No Reddit credentials, no Google CSE key/cx.
 
 ## Build slices
 
-1. **Schema + brand-dark shell** ← current — tables, theme, placeholder tiles.
-2. GDELT poller. 3. Reddit. 4. YouTube. 5. Google CSE.
-6. X/Meta placeholders + the daily cron orchestrator and Refresh wiring.
+1. **Reconciliation + schema + brand-dark shell** ← current — tables, theme,
+   placeholder tiles for every source in the roster above.
+2. GDELT pollers (keyword sweep + watchlist sweep).
+3. Reddit (public RSS).
+4. YouTube.
+5. X/Meta/Web-search placeholders + the daily cron orchestrator and Refresh wiring.
+
+Full build spec: [`new-listening-dashboard-claude-code-prompt.md`](new-listening-dashboard-claude-code-prompt.md).
 
 ## Local development
 

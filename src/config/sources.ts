@@ -24,46 +24,61 @@ export const SOURCES: SourceDef[] = [
     id: "gdelt",
     label: "GDELT",
     kind: "live",
-    blurb: "Global news & media articles. No key, no daily cap — the backbone.",
+    blurb: "News outlets only — the tripwire backbone. No key, no daily cap.",
+    slice: 2,
+  },
+  {
+    id: "gdelt_watchlist",
+    label: "GDELT Watchlist",
+    kind: "live",
+    blurb: "Watchlist domains, news only — curated outlets most likely to cover us.",
     slice: 2,
   },
   {
     id: "reddit",
     label: "Reddit",
     kind: "live",
-    blurb: "Posts & comments across all subreddits via OAuth search.",
+    blurb: "Posts only, via public RSS — no auth (self-serve OAuth apps are dead).",
     slice: 3,
   },
   {
     id: "youtube",
     label: "YouTube",
     kind: "live",
-    blurb: "Videos matching either keyword, newest first.",
+    blurb: "Videos matching any keyword, newest first.",
     slice: 4,
-  },
-  {
-    id: "google_cse",
-    label: "Google Search",
-    kind: "live",
-    blurb: "Programmable Search across the open web (100 queries/day).",
-    slice: 5,
   },
   {
     id: "x",
     label: "X / Twitter",
     kind: "unavailable",
     blurb: "No free API path for mention search — not connected.",
-    slice: 6,
+    slice: 5,
   },
   {
     id: "meta",
     label: "Meta",
     kind: "unavailable",
     blurb: "Facebook / Instagram have no free mention search — not connected.",
-    slice: 6,
+    slice: 5,
+  },
+  {
+    id: "websearch",
+    label: "Web Search",
+    kind: "unavailable",
+    blurb: "No free API path — not connected. Google CSE closed to new projects.",
+    slice: 5,
   },
 ];
 
-/** The two brand terms every source searches for. */
-export const KEYWORDS = ["lakepointe church", "josh howerton"] as const;
+/**
+ * Brand terms every poller searches for. Single source of truth — pollers
+ * must not hardcode terms. Includes the legacy "Lake Pointe" (two-word)
+ * styling still in the wild.
+ */
+export const KEYWORDS = [
+  '"Lakepointe Church"',
+  '"Lake Pointe Church"',
+  '"Josh Howerton"',
+] as const;
 export type Keyword = (typeof KEYWORDS)[number];
