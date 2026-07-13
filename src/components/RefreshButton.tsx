@@ -1,44 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { refreshNow } from "@/app/actions";
 
 /**
- * Manual "Refresh now" — POSTs to the same guarded poll route the daily cron
- * hits, so staff can trigger an on-demand pull. The route is wired up in
- * Slice 6; until then this reports that polling isn't connected yet rather than
- * pretending to succeed (loud over silent).
+ * Manual "Refresh now" — runs the same orchestrator as the daily cron via a
+ * Server Action (guarded server-side; no secret in the browser). Reports the
+ * outcome loudly: new-mention count on success, the source error on failure.
  */
 export default function RefreshButton({ enabled }: { enabled: boolean }) {
-  const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
-  async function onClick() {
+  function onClick() {
     if (!enabled) {
-      setNote("Polling connects in a later slice — no poll route yet.");
+      setNote("No sources are connected yet.");
       return;
     }
-    setBusy(true);
     setNote(null);
-    try {
-      const res = await fetch("/api/cron/poll", { method: "POST" });
-      if (!res.ok) throw new Error(`Poll route returned ${res.status}`);
-      // A full reload is the simplest way to re-read freshly polled data.
-      window.location.reload();
-    } catch (err) {
-      setNote(err instanceof Error ? err.message : "Refresh failed.");
-    } finally {
-      setBusy(false);
-    }
+    startTransition(async () => {
+      try {
+        const res = await refreshNow();
+        if (!res.ok) {
+          setNote(res.errors[0] ?? "A source failed — see the banner.");
+        } else {
+          setNote(
+            res.newTotal > 0
+              ? `Added ${res.newTotal} new mention${res.newTotal === 1 ? "" : "s"}.`
+              : "No new mentions.",
+          );
+        }
+        router.refresh();
+      } catch (err) {
+        setNote(err instanceof Error ? err.message : "Refresh failed.");
+      }
+    });
   }
 
   return (
     <div className="flex flex-col items-end gap-1">
       <button
         onClick={onClick}
-        disabled={busy}
+        disabled={pending}
         className="rounded-lg bg-lp-orange px-4 py-2 text-[13px] font-medium text-white transition hover:bg-lp-orange/90 disabled:opacity-60"
       >
-        {busy ? "Refreshing…" : "Refresh now"}
+        {pending ? "Refreshing…" : "Refresh now"}
       </button>
       {note && <span className="text-[11px] text-lp-taupe/60">{note}</span>}
     </div>
