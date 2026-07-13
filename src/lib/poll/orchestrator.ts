@@ -37,7 +37,7 @@ export async function runPoll(): Promise<{ results: SourceResult[] }> {
     try {
       const mentions = await withBudget(
         poller.run(),
-        PER_SOURCE_BUDGET_MS,
+        poller.budgetMs ?? PER_SOURCE_BUDGET_MS,
         poller.label,
       );
       const newCount = await insertMentions(mentions);

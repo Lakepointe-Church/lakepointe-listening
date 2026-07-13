@@ -53,6 +53,12 @@ export async function getDashboardData(): Promise<{
 
   const runBySource = new Map(latestRuns.map((r) => [r.source, r]));
   const health: SourceHealth[] = SOURCES.map((s) => {
+    // Placeholder sources aren't polled — ignore any historical poll_run
+    // rows (e.g. from before a source was demoted) so a stale error can't
+    // trip the banner forever.
+    if (s.kind === "unavailable") {
+      return { source: s.id, state: "never" as const, lastRun: null };
+    }
     const run = runBySource.get(s.id) ?? null;
     return { source: s.id, state: deriveState(run), lastRun: run };
   });

@@ -111,18 +111,48 @@ not yet committed — see handoff note below.
       schedule) still, and a look-over once Slices 3–4 land before committing
       as Slice 5.
 
-**Next action (handoff for a new session):** Show Slice 4 to the user, then
-Slice 5 (placeholder tiles exist already; remaining work = `vercel.json` cron
-wiring + final look-over). Before the first deployed poll run: the user must
-replace the corrupted YOUTUBE_API_KEY on Vercel (see Slice 4 notes). Three
-carried-forward loose ends, none blocking: (1) Slice 2's GDELT output still
-needs a real 200 response from a network that isn't rate-limited, to confirm
-the artlist field shape and the `repeat2`/watchlist-batching open questions.
-(2) `npm run lint` fails repo-wide with a pre-existing `TypeError: Converting
-circular structure to JSON` inside `eslint-config-next`'s flat-config loading
-— predates Slice 3, not yet root-caused; `npx tsc --noEmit` and `npm run
-build` both pass clean. (3) Reddit's per-feed result cap is shared across
-the OR-combined query (see Slice 3 notes).
+**First deployed poll run (2026-07-13, via Refresh now) — findings & fixes:**
+All four sources failed loudly (the error-banner design worked exactly as
+intended). Diagnosis and outcomes:
+
+- **GDELT watchlist:** rejected with "Your query was too short or too long" —
+  that's GDELT's generic PARSE error, not a length limit. Root cause: REV4's
+  example query double-parenthesizes the term group, and GDELT's docs state
+  "Boolean OR blocks cannot be nested at this time." Fixed: one level of
+  parens per OR group, plus adaptive batch-halving if a genuine length limit
+  ever surfaces (none is documented; no vantage point available to bisect —
+  GDELT 429s every shared egress IP we can reach from here). Watchlist poller
+  got a `budgetMs` override (150s) for the worst-case splitting path.
+- **GDELT keyword sweep:** 429 on first call — intermittent collision on
+  Vercel's shared egress IP (the watchlist call got through 5.5s later, so
+  the IP is not permanently saturated). No code change; spec forbids
+  retry-hammering. Expect occasional one-run GDELT misses; chronic misses
+  would justify an external scheduler (the route design already supports it).
+- **Reddit:** 403 block page from Vercel — Reddit blocks datacenter IPs for
+  unauthenticated requests (works from residential; verified both live).
+  USER DECISION 2026-07-13: demoted to placeholder tile ("blocked from cloud
+  IPs"). Poller code stays, live-verified; re-enable = flip `kind` in
+  config/sources.ts + re-add to POLLERS registry. queries.ts now gives
+  unavailable sources a static "never" state so Reddit's stale error
+  poll_run can't trip the banner forever.
+- **YouTube:** "API key not valid" — the user's dashboard swap didn't hold a
+  valid value (same hand-transcription problem as before). The old entries
+  were REMOVED from Vercel; the user must re-add from the verified-good
+  local .env.local value via
+  `awk -F= '/^YOUTUBE_API_KEY/{v=substr($0,index($0,"=")+1); gsub(/^"|"$/,"",v); printf "%s", v}' .env.local | vercel env add YOUTUBE_API_KEY production`
+  (and again with `preview`). Env changes need a redeploy to take effect.
+- Also fixed earlier the same day: production 500 (digest 115513156) on
+  every page load — fresh DB had no tables since ensureSchema() only ran
+  inside polls. getDashboardData now self-heals on Postgres 42P01 only.
+
+**Next action (handoff for a new session):** After the YouTube key is
+re-added and pushed changes deploy, click Refresh now again — expect GDELT
+(both sweeps) + YouTube green. Then Slice 5 wrap-up: `vercel.json` cron
+wiring + final look-over. Carried loose ends: (1) `repeat2:` query variant
+still unverified (needs a GDELT 200 from a testable vantage). (2) `npm run
+lint` fails repo-wide (pre-existing eslint-config-next circular-JSON error);
+tsc + build pass. (3) Reddit's per-feed cap note from Slice 3 is moot while
+demoted.
 
 ---
 

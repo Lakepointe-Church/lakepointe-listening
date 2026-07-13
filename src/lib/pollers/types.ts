@@ -21,5 +21,7 @@ export type MentionInput = {
 export type Poller = {
   id: string; // matches mention.source / poll_run.source
   label: string;
+  /** Overrides the orchestrator's default per-source time budget (ms). */
+  budgetMs?: number;
   run: () => Promise<MentionInput[]>;
 };

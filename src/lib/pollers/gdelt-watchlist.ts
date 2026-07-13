@@ -1,6 +1,6 @@
 import type { MentionInput, Poller } from "./types";
 import { WATCHLIST_DOMAINS } from "@/config/watchlist-domains";
-import { fetchGdeltArticles, parseSeendate } from "./gdelt-client";
+import { fetchGdeltArticles, GdeltRateLimitError, parseSeendate } from "./gdelt-client";
 
 // GDELT DOC 2.0 watchlist sweep — the CSE replacement: restricts the same
 // keyword group to a curated list of domains (search-domains.md) via
@@ -8,17 +8,23 @@ import { fetchGdeltArticles, parseSeendate } from "./gdelt-client";
 // article-level matching might rank past `maxrecords=250`. Same 2-day
 // window and shared ≥5.5s-spaced client as the keyword sweep (gdelt.ts).
 //
-// Term group is bare/short forms per REV4's example query, not the
-// keyword-sweep's full exact phrases:
-//   query=(("Lakepointe" OR "Lake Pointe" OR "Howerton")) (domainis:a.com OR domainis:b.com)
+// Query shape — ONE level of parentheses per OR group:
+//   ("Lakepointe" OR "Lake Pointe" OR "Howerton") (domainis:a.com OR domainis:b.com)
+// GDELT's docs state "Boolean OR blocks cannot be nested at this time", and
+// the first deployed run (July 13, 2026) proved it: REV4's double-parenthesed
+// example query was rejected with GDELT's generic parse error ("Your query
+// was too short or too long") — that message is about parsing, not length.
 //
-// Batching: REV4 flags the OR-of-domainis chain as unverified and says to
-// split into 2-3 calls if GDELT rejects a long chain. This sandbox couldn't
-// get a live 200 to find the actual limit (see gdelt-client.ts) — chunking
-// into 3 conservative batches of 20 is a defensive choice, not a confirmed
-// one. Revisit batch size once a real response is available.
+// Batching: no query-length limit is documented anywhere, and no vantage
+// point available to this session could bisect one (GDELT 429s every shared
+// egress IP; see git history). So the batcher self-adapts: if GDELT rejects
+// a batch with the parse error, the batch is split in half and retried
+// (still ≥5.5s-spaced — this is a deterministic parse rejection, NOT rate
+// limiting, so splitting doesn't violate the never-retry-hammer rule). A 429
+// still aborts the whole sweep loudly.
 const WATCHLIST_TERMS = ["Lakepointe", "Lake Pointe", "Howerton"];
 const BATCH_SIZE = 20;
+const MIN_BATCH = 2;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -26,17 +32,39 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+function isParseRejection(err: unknown): boolean {
+  return err instanceof Error && !(err instanceof GdeltRateLimitError) &&
+    err.message.toLowerCase().includes("too short or too long");
+}
+
 export const gdeltWatchlistPoller: Poller = {
   id: "gdelt_watchlist",
   label: "GDELT Watchlist",
+  // Worst case (adaptive splitting kicks in) needs more than the default 60s
+  // at ≥5.5s per call; the whole run still sits far under the 300s cron cap.
+  budgetMs: 150_000,
   async run() {
     const out: MentionInput[] = [];
     const termGroup = `(${WATCHLIST_TERMS.map((t) => `"${t}"`).join(" OR ")})`;
 
-    for (const batch of chunk(WATCHLIST_DOMAINS, BATCH_SIZE)) {
+    const queue = chunk(WATCHLIST_DOMAINS, BATCH_SIZE);
+    while (queue.length > 0) {
+      const batch = queue.shift()!;
       const domainGroup = `(${batch.map((d) => `domainis:${d}`).join(" OR ")})`;
-      const query = `(${termGroup}) ${domainGroup}`;
-      const articles = await fetchGdeltArticles(query);
+      const query = `${termGroup} ${domainGroup}`;
+
+      let articles;
+      try {
+        articles = await fetchGdeltArticles(query);
+      } catch (err) {
+        if (isParseRejection(err) && batch.length >= MIN_BATCH * 2) {
+          const mid = Math.ceil(batch.length / 2);
+          queue.unshift(batch.slice(0, mid), batch.slice(mid));
+          continue;
+        }
+        throw err; // rate limit, floor-size rejection, or anything else: loud
+      }
+
       for (const a of articles) {
         if (!a.url) continue;
         out.push({
