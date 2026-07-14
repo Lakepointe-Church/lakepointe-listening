@@ -163,9 +163,21 @@ discarded when kw-2 threw. Two follow-up changes:
   aborts the sweep loudly. Never a hammer. GDELT pollers' budgets raised
   (120s / 150s) for the retry worst case; total run stays under the 300s cap.
 
+**Third deployed run (2026-07-14):** YouTube green (queue 53→80); the 20s
+retry and partial persistence worked as designed — but GDELT still failed
+from iad1 (keyword sweep 429'd through its retry; watchlist then got a
+dropped connection, "fetch failed"). Three runs = iad1's shared egress IPs
+are saturated with other tenants' GDELT traffic around the clock. Fix
+shipped: `/api/cron/poll` is region-pinned to cle1 (low tenant density,
+~30ms from GDELT) via `preferredRegion`; `refreshNow` now proxies to that
+route server-to-server with the Bearer secret (a server action runs in the
+page's region, so a direct runPoll() would stay on the bad IPs). Locally
+(no VERCEL env) refreshNow still runs pollers in-process. If cle1's IPs
+turn out saturated too, next levers: another quiet region, or an external
+scheduler hitting the route from a non-datacenter IP.
+
 **Next action (handoff for a new session):** Deploy + Refresh now again —
-expect all three live tiles green (GDELT may still occasionally lose the IP
-lottery twice in a row; that's the accepted residual). Then Slice 5 wrap-up:
+expect all three live tiles green now that polling runs from cle1. Then Slice 5 wrap-up:
 `vercel.json` cron wiring + final look-over. Carried loose ends: (1)
 `repeat2:` query variant still unverified (needs a GDELT 200 from a testable
 vantage). (2) `npm run lint` fails repo-wide (pre-existing eslint-config-next
