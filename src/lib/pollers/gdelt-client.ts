@@ -51,6 +51,20 @@ export type GdeltArticle = {
 const RETRY_AFTER_429_MS = 20_000;
 
 /**
+ * GDELT-wide cooldown: once a call 429s through its retry, EVERY GDELT call
+ * for the next 10 minutes fails fast without touching the network. Why: in
+ * two deployed runs, the watchlist sweep's first call got its connection
+ * dropped outright ("fetch failed") immediately after the keyword sweep
+ * exhausted a 429 retry — GDELT appears to tar-pit IPs that keep knocking
+ * after being limited. Stopping all GDELT for the run (REV4's original rule,
+ * applied across both pollers) avoids feeding that. TTL-scoped rather than a
+ * boolean so warm serverless instances can't leak the flag into the next
+ * day's run (10 min ≪ 24h between runs, > one run's length).
+ */
+const COOLDOWN_MS = 10 * 60_000;
+let cooldownUntil = 0;
+
+/**
  * One spaced GDELT artlist call over a 2-day window, with a single spaced
  * retry if the shared-IP 429 lottery strikes (see above). Empty result comes
  * back as a bare `{}` (no `articles` key) — mapped to `[]`, not an error.
@@ -58,6 +72,11 @@ const RETRY_AFTER_429_MS = 20_000;
  * any other failure (non-OK HTTP, non-JSON body).
  */
 export async function fetchGdeltArticles(query: string): Promise<GdeltArticle[]> {
+  if (Date.now() < cooldownUntil) {
+    throw new GdeltRateLimitError(
+      "GDELT skipped: rate-limited earlier in this run, cooling down instead of re-knocking",
+    );
+  }
   for (let attempt = 0; ; attempt++) {
     const wait = MIN_GAP_MS - (Date.now() - lastCallAt);
     if (lastCallAt > 0 && wait > 0) await sleep(wait);
@@ -78,6 +97,7 @@ export async function fetchGdeltArticles(query: string): Promise<GdeltArticle[]>
         await sleep(RETRY_AFTER_429_MS);
         continue;
       }
+      cooldownUntil = Date.now() + COOLDOWN_MS;
       throw new GdeltRateLimitError(
         `GDELT rate limit for "${query}" (persisted through one ${RETRY_AFTER_429_MS / 1000}s retry): ${body.slice(0, 160)}`,
       );

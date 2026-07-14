@@ -183,10 +183,32 @@ non-datacenter IP.
       after Hobby's ±59min jitter) and `regions: ["cle1"]`. v1 wiring
       complete.
 
-**Next action (handoff for a new session):** Refresh now again — expect all
-three live tiles green now that polling runs from cle1 (verify via
-x-vercel-id on /api/cron/poll showing ::cle1::). Then confirm the first
-scheduled cron run lands (~8am Central) and v1 is done. Then Slice 5 wrap-up:
+**Fourth deployed run (2026-07-14, from cle1):** identical GDELT failure
+fingerprint as iad1 — 429 through the retry, then "fetch failed" on the
+watchlist. CONCLUSION: GDELT throttles cloud-provider IP ranges wholesale
+(every datacenter vantage tried — Vercel iad1/cle1, local sandboxes,
+Anthropic fetch infra — 429s or drops, while spacing math never explains
+it). Region-hopping is a dead end. The "fetch failed" is GDELT tar-pitting
+an IP that keeps knocking after a persistent 429. Mitigations shipped:
+keyword sweep collapsed to ONE OR-combined call (REV4 pre-authorized this
+lever; query_matched recovered post-hoc from title, else "keyword
+(combined)"); 10-min GDELT-wide cooldown after a persistent 429 so the
+watchlist doesn't poke the tar-pit (restores REV4's stop-for-the-run rule
+across both pollers; TTL-scoped so warm instances can't leak it into the
+next day). Run is now ≤4 GDELT calls instead of 6.
+
+**If GDELT still fails from cle1 after this:** the free-GDELT-from-cloud
+path is fundamentally contested. Decision point for the user, options:
+(a) external trigger from a residential/church network hitting the guarded
+poll route (architecture already supports it); (b) GDELT Web NGrams 3.0
+dataset pipeline (their own 429 message recommends it; a real build, F-
+roadmap scale); (c) accept intermittent GDELT coverage (2-day lookback
+patches single missed days, not streaks).
+
+**Next action (handoff for a new session):** Refresh now again — best
+remaining odds are 1 keyword call + 3 watchlist calls, all ≥5.5s apart with
+one 20s retry each. Then confirm the first scheduled cron run (~8am
+Central). Sources ex-GDELT (YouTube; Reddit demoted) are DONE and green. Then Slice 5 wrap-up:
 `vercel.json` cron wiring + final look-over. Carried loose ends: (1)
 `repeat2:` query variant still unverified (needs a GDELT 200 from a testable
 vantage). (2) `npm run lint` fails repo-wide (pre-existing eslint-config-next
