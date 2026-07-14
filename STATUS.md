@@ -168,16 +168,25 @@ retry and partial persistence worked as designed — but GDELT still failed
 from iad1 (keyword sweep 429'd through its retry; watchlist then got a
 dropped connection, "fetch failed"). Three runs = iad1's shared egress IPs
 are saturated with other tenants' GDELT traffic around the clock. Fix
-shipped: `/api/cron/poll` is region-pinned to cle1 (low tenant density,
-~30ms from GDELT) via `preferredRegion`; `refreshNow` now proxies to that
-route server-to-server with the Bearer secret (a server action runs in the
-page's region, so a direct runPoll() would stay on the bad IPs). Locally
-(no VERCEL env) refreshNow still runs pollers in-process. If cle1's IPs
-turn out saturated too, next levers: another quiet region, or an external
-scheduler hitting the route from a non-datacenter IP.
+shipped: all functions pinned to cle1 (low tenant density, ~30ms from
+GDELT) via `vercel.json` `regions` — NOTE: `preferredRegion` in the route
+file did NOT work (Node functions ignore it; it's Edge-runtime-only;
+verified via x-vercel-id still showing iad1). `refreshNow` proxies to the
+poll route server-to-server with the Bearer secret so manual + cron polls
+share one entry point/code path. Locally (no VERCEL env) refreshNow runs
+pollers in-process. If cle1's IPs turn out saturated too, next levers:
+another quiet region, or an external scheduler hitting the route from a
+non-datacenter IP.
 
-**Next action (handoff for a new session):** Deploy + Refresh now again —
-expect all three live tiles green now that polling runs from cle1. Then Slice 5 wrap-up:
+- [x] Slice 5 — placeholder tiles (done earlier) + cron wiring: vercel.json
+      now sets `crons` (`0 13 * * *` → GET /api/cron/poll, ~8am Central
+      after Hobby's ±59min jitter) and `regions: ["cle1"]`. v1 wiring
+      complete.
+
+**Next action (handoff for a new session):** Refresh now again — expect all
+three live tiles green now that polling runs from cle1 (verify via
+x-vercel-id on /api/cron/poll showing ::cle1::). Then confirm the first
+scheduled cron run lands (~8am Central) and v1 is done. Then Slice 5 wrap-up:
 `vercel.json` cron wiring + final look-over. Carried loose ends: (1)
 `repeat2:` query variant still unverified (needs a GDELT 200 from a testable
 vantage). (2) `npm run lint` fails repo-wide (pre-existing eslint-config-next

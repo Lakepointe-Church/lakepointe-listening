@@ -9,11 +9,11 @@ import { runPoll, type SourceResult } from "@/lib/poll/orchestrator";
  * CRON_SECRET ever reaching the browser.
  *
  * On Vercel this PROXIES to /api/cron/poll (adding the Bearer secret
- * server-to-server) instead of calling runPoll() directly: the poll route is
- * region-pinned away from iad1's GDELT-saturated egress IPs (see the route
- * file), and a server action always runs in its page's region — a direct
- * call would put manual polls right back on the bad IPs. Locally (no Vercel
- * env) it just runs the pollers in-process.
+ * server-to-server) instead of calling runPoll() directly, so manual and
+ * scheduled polls share one entry point: same region (vercel.json pins all
+ * functions to cle1 — see the route file for why), same code path, same
+ * poll_run provenance. Locally (no Vercel env) it runs the pollers
+ * in-process.
  */
 export async function refreshNow() {
   const results = process.env.VERCEL
