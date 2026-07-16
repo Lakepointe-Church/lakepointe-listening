@@ -37,14 +37,12 @@ export const SOURCES: SourceDef[] = [
   {
     id: "reddit",
     label: "Reddit",
-    // Demoted to placeholder 2026-07-13: Reddit 403-blocks Vercel's
-    // datacenter IPs (verified live — works from residential networks, block
-    // page from the deployed function). The poller (pollers/reddit.ts) is
-    // built and live-verified; re-enable by flipping this to "live" and
-    // re-adding redditPoller to the POLLERS registry if the tool ever gets a
-    // non-datacenter egress (external scheduler, F5 API upgrade, etc.).
-    kind: "unavailable",
-    blurb: "Public RSS is blocked from cloud IPs — not connected.",
+    // Demoted to placeholder 2026-07-13 (403 from Vercel's iad1 datacenter
+    // IPs). Re-verified live 2026-07-16 from cle1 (Slice 5 Step 1 egress
+    // check) — the block doesn't reproduce from this region, so it's back to
+    // "live". Public RSS, no auth; one call per keyword, politely gapped.
+    kind: "live",
+    blurb: "Posts matching any keyword, newest first.",
     slice: 3,
   },
   {
@@ -53,6 +51,13 @@ export const SOURCES: SourceDef[] = [
     kind: "live",
     blurb: "Videos matching any keyword, newest first.",
     slice: 4,
+  },
+  {
+    id: "google_news",
+    label: "Google News",
+    kind: "live",
+    blurb: "News coverage via Google News search RSS — no key, no daily cap.",
+    slice: 6,
   },
   {
     id: "x",
