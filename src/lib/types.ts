@@ -16,6 +16,7 @@ export type Mention = {
   sentiment: string | null; // NULL in v1
   status: MentionStatus;
   title_match: boolean | null; // google_news only
+  subreddit: string | null; // reddit only
 };
 
 export type PollStatus = "ok" | "error";

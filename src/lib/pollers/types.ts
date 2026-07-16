@@ -11,6 +11,7 @@ export type MentionInput = {
   query_matched: string; // which keyword matched
   published_at: string | null; // ISO 8601, or null if the source has no date
   title_match?: boolean; // google_news only: keyword found in title (UI sort hint, never a filter)
+  subreddit?: string | null; // reddit only: bare subreddit name from <category term>
 };
 
 /**

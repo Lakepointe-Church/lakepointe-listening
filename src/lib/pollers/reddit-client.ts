@@ -7,43 +7,44 @@ import { XMLParser } from "fast-xml-parser";
  * option names (`ignoreAttributes`, `attributeNamePrefix`, `textNodeName`)
  * confirmed against the installed package's src/fxp.d.ts, not from memory.
  *
- * Verified live (this session, July 2026) against
- * https://www.reddit.com/search.rss?q=...&sort=new for all three KEYWORDS
- * entries, separately and OR-combined in one query:
+ * Re-verified live 2026-07-16 (Slice 5 build prompt), superseding the prior
+ * session's combined-OR-query design:
+ *   - UA and endpoint reconfirmed from a live curl:
+ *     `https://www.reddit.com/search.rss?q=...&sort=new` with
+ *     `lakepointe-listening/1.0 (internal brand monitor)`.
+ *   - Egress from Vercel (cle1) was reconfirmed reachable in this session's
+ *     Step 1 (src/app/api/cron/egress-check/route.ts) — the prior demotion to
+ *     a placeholder tile (403 from iad1) does not reproduce from cle1.
+ *   - One call PER KEYWORDS entry (not one OR-combined call) per this
+ *     session's spec, with an explicit ≥2s politeness gap between
+ *     consecutive requests to reddit.com within a run — see `politeGap`.
  *   - Feed mixes result kinds: entries with `<id>` prefixed `t5_` are
- *     subreddit/community results, not posts. REV4's field mapping assumed
- *     `t3_` fullnames throughout; only `t3_`-prefixed entries are posts —
- *     `t5_` entries must be filtered out or they'd be mis-mapped as posts.
- *   - `<link href>` is the Reddit comments permalink (not the external URL
- *     the post links to, which — if any — is only reachable by scraping the
- *     `<content>` HTML). Using the permalink as `url` matches REV4's mapping
- *     and is always present, unlike an external link.
- *   - `<updated>` is already ISO 8601 with a numeric offset (e.g.
- *     "2026-07-09T16:58:00+00:00") — no custom parsing needed, unlike
- *     GDELT's compact seendate format.
+ *     subreddit/community results, not posts; only `t3_`-prefixed entries
+ *     are posts (unchanged from the prior session's finding).
+ *   - `<published>` and `<updated>` were identical across all 22 real t3_
+ *     posts in this session's live pull — `published` is used per spec
+ *     (post creation time, not last-edit time), falling back to `updated`
+ *     for the (unverified) case where they'd ever diverge.
+ *   - `<category term="..." label="r/...">` carries the subreddit: `term` is
+ *     the bare name (e.g. "Christianmarriage"), `label` adds the "r/" prefix
+ *     — confirmed live.
  *   - No official rate-limit docs exist for this unauthenticated endpoint,
  *     but live responses carry `x-ratelimit-*` headers, and a second request
  *     made ~2s after a first (while `x-ratelimit-remaining: 0.0` was still in
- *     effect, ~50-60s reset window) came back HTTP 200 with a completely
- *     EMPTY body — not a 429, not valid XML, not an empty-but-valid feed.
- *     fast-xml-parser silently returns `{}` for that, so `!parsed.feed` is
- *     the loud-error signal here, distinct from "valid feed, no <entry>"
- *     (genuine zero results).
- *   - A single OR-combined query (`"a" OR "b" OR "c"`) returns real matches
- *     for all three KEYWORDS terms in one call (spot-checked: a result whose
- *     title had no obvious brand terms turned out to mention "Pastor Josh
- *     Howerton" in the body). One combined call per run — vs. one call per
- *     keyword like the GDELT pollers — sidesteps the ~50-60s per-request
- *     throttle window entirely fitting comfortably in the 60s per-source
- *     budget. Trade-off: Reddit's result cap (observed ~22-24 entries per
- *     feed regardless of query) is shared across all three terms instead of
- *     each getting its own window, so a spike in one term's matches could
- *     in theory crowd out another's. Flagged, not solved — acceptable for a
- *     v1, once-daily, 2-day-lookback tool.
+ *     effect) came back HTTP 200 with a completely EMPTY body — not a 429,
+ *     not valid XML, not an empty-but-valid feed. fast-xml-parser silently
+ *     returns `{}` for that, so `!parsed.feed` is the loud-error signal here,
+ *     distinct from "valid feed, no <entry>" (genuine zero).
  */
 
 const ENDPOINT = "https://www.reddit.com/search.rss";
-const USER_AGENT = "web:lakepointe-listening:v1.0 (internal monitoring)";
+const USER_AGENT = "lakepointe-listening/1.0 (internal brand monitor)";
+
+/** Minimum gap between consecutive requests to reddit.com within one run (spec: "≥2s"). */
+const MIN_GAP_MS = 2000;
+let lastCallAt = 0;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -56,7 +57,9 @@ export type RedditEntry = {
   title?: string;
   link?: { "@_href"?: string };
   author?: { name?: string };
+  published?: string;
   updated?: string;
+  category?: { "@_term"?: string; "@_label"?: string };
   content?: { "#text"?: string } | string;
 };
 
@@ -64,13 +67,16 @@ export type RedditEntry = {
 export class RedditRateLimitError extends Error {}
 
 /**
- * One search.rss call. Throws RedditRateLimitError on 429 or an empty/
- * malformed body (see module doc — Reddit returns 200 with no body when
- * called inside its undocumented throttle window, not a 429). Throws a plain
- * Error on any other non-OK HTTP. A valid feed with no `<entry>` at all is a
- * genuine zero and returns [].
+ * One search.rss call for a single keyword phrase, gapped ≥2s from the
+ * previous call to this host within the run (politeness, not a rate-limit
+ * workaround — no retry here; a 429 or the empty-body signature both throw
+ * RedditRateLimitError and the caller decides whether to keep going).
  */
 export async function fetchRedditEntries(query: string): Promise<RedditEntry[]> {
+  const wait = MIN_GAP_MS - (Date.now() - lastCallAt);
+  if (lastCallAt > 0 && wait > 0) await sleep(wait);
+  lastCallAt = Date.now();
+
   const url = `${ENDPOINT}?q=${encodeURIComponent(query)}&sort=new`;
 
   const res = await fetch(url, {

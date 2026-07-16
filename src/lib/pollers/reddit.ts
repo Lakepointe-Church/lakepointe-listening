@@ -3,11 +3,9 @@ import { KEYWORDS } from "@/config/sources";
 import { fetchRedditEntries, type RedditEntry } from "./reddit-client";
 import { stripHtml } from "@/lib/stripHtml";
 
-// Reddit public search RSS — posts only, no auth. One OR-combined query
-// covering all of KEYWORDS (see reddit-client.ts for why: Reddit's
-// undocumented per-request throttle makes one-call-per-keyword, like the
-// GDELT pollers, blow the 60s per-source budget).
-const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+// Reddit public search RSS — one call per KEYWORDS entry (spec change from
+// the prior session's OR-combined query, now that egress from Vercel is
+// reconfirmed reachable — see reddit-client.ts), politely gapped ≥2s apart.
 
 function isPost(e: RedditEntry): boolean {
   return typeof e.id === "string" && e.id.startsWith("t3_");
@@ -20,54 +18,51 @@ function contentText(e: RedditEntry): string | null {
   return raw ? stripHtml(raw) : null;
 }
 
-// Reddit's search is token-based, not strict phrase matching (a post can
-// come back with the brand term only in body text, not the title) — this
-// mirrors REV4's "mentioning church/Howerton near Lakepointe" noise filter
-// and also recovers which KEYWORDS entry actually matched, for query_matched.
-function matchedKeyword(text: string): string | null {
-  const lower = text.toLowerCase();
-  for (const k of KEYWORDS) {
-    if (lower.includes(k.replace(/"/g, "").toLowerCase())) return k;
-  }
-  const hasLakepointe = /lake\s*pointe/.test(lower);
-  const hasChurch = lower.includes("church");
-  const hasHowerton = lower.includes("howerton");
-  return (hasLakepointe && hasChurch) || hasHowerton ? "keyword (combined)" : null;
-}
-
 export const redditPoller: Poller = {
   id: "reddit",
   label: "Reddit",
   async run() {
-    const query = KEYWORDS.join(" OR ");
-    const entries = await fetchRedditEntries(query);
-    const cutoff = Date.now() - TWO_DAYS_MS;
-
     const out: MentionInput[] = [];
-    for (const e of entries) {
-      if (!isPost(e)) continue; // drop t5_ subreddit/community results — see reddit-client.ts
+    let skippedCommunities = 0;
 
-      const url = e.link?.["@_href"];
-      if (!url) continue;
+    for (const keyword of KEYWORDS) {
+      let entries;
+      try {
+        entries = await fetchRedditEntries(keyword);
+      } catch (err) {
+        // Keep whatever earlier keywords already produced; fail loudly for the run.
+        return {
+          mentions: out,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
 
-      const publishedAt = e.updated ? Date.parse(e.updated) : NaN;
-      if (Number.isNaN(publishedAt) || publishedAt < cutoff) continue;
+      for (const e of entries) {
+        if (!isPost(e)) {
+          skippedCommunities++; // t5_ subreddit/community result, not a post
+          continue;
+        }
 
-      const excerpt = contentText(e);
-      const title = e.title?.trim() || null;
-      const query_matched = matchedKeyword(`${title ?? ""} ${excerpt ?? ""}`);
-      if (!query_matched) continue; // noise filter: no brand term found in title or body
+        const url = e.link?.["@_href"];
+        if (!url) continue;
 
-      out.push({
-        source: "reddit",
-        source_uid: e.id?.trim() || url,
-        url,
-        title,
-        excerpt,
-        author: e.author?.name?.trim() || null,
-        query_matched,
-        published_at: new Date(publishedAt).toISOString(),
-      });
+        const publishedAt = Date.parse(e.published ?? e.updated ?? "");
+        out.push({
+          source: "reddit",
+          source_uid: e.id?.trim() || url,
+          url,
+          title: e.title?.trim() || null,
+          excerpt: contentText(e),
+          author: e.author?.name?.trim() || null,
+          query_matched: keyword,
+          published_at: Number.isNaN(publishedAt) ? null : new Date(publishedAt).toISOString(),
+          subreddit: e.category?.["@_term"]?.trim() || null,
+        });
+      }
+    }
+
+    if (skippedCommunities > 0) {
+      console.log(`[reddit] skipped ${skippedCommunities} t5_ subreddit/community result(s)`);
     }
     return { mentions: out };
   },
