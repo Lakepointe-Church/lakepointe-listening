@@ -44,12 +44,14 @@ export async function ensureSchema() {
       fetched_at     timestamptz NOT NULL DEFAULT now(),
       sentiment      text,
       status         text NOT NULL DEFAULT 'new',
+      title_match    boolean,
       UNIQUE (source, source_uid)
     )
   `;
   // Pre-existing installs: CREATE TABLE IF NOT EXISTS above is a no-op once
   // the table exists, so new columns need an explicit idempotent ADD.
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS normalized_url text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS title_match boolean`;
 
   await sql`CREATE INDEX IF NOT EXISTS mention_fetched_idx  ON mention (fetched_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS mention_source_idx   ON mention (source)`;
@@ -82,10 +84,10 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
 
   const inserted = (await sql.query(
     `INSERT INTO mention
-       (source, source_uid, url, normalized_url, title, excerpt, author, query_matched, published_at)
+       (source, source_uid, url, normalized_url, title, excerpt, author, query_matched, published_at, title_match)
      SELECT * FROM UNNEST(
        $1::text[], $2::text[], $3::text[], $4::text[],
-       $5::text[], $6::text[], $7::text[], $8::text[], $9::timestamptz[]
+       $5::text[], $6::text[], $7::text[], $8::text[], $9::timestamptz[], $10::boolean[]
      )
      ON CONFLICT (source, source_uid) DO NOTHING
      RETURNING id`,
@@ -99,6 +101,7 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
       rows.map((r) => r.author),
       rows.map((r) => r.query_matched),
       rows.map((r) => r.published_at),
+      rows.map((r) => r.title_match ?? null),
     ],
   )) as { id: string }[];
 

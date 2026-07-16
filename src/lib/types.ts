@@ -15,6 +15,7 @@ export type Mention = {
   fetched_at: string; // ISO
   sentiment: string | null; // NULL in v1
   status: MentionStatus;
+  title_match: boolean | null; // google_news only
 };
 
 export type PollStatus = "ok" | "error";

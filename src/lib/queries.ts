@@ -75,7 +75,7 @@ async function readDashboard(): Promise<{
 
   const mentions = (await sql`
     SELECT id, source, source_uid, url, title, excerpt, author,
-           query_matched, published_at, fetched_at, sentiment, status
+           query_matched, published_at, fetched_at, sentiment, status, title_match
     FROM mention
     ORDER BY COALESCE(published_at, fetched_at) DESC
     LIMIT 200

@@ -13,7 +13,7 @@
 -- One row per discovered mention, deduped across runs.
 CREATE TABLE IF NOT EXISTS mention (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  source         text NOT NULL,          -- 'gdelt' | 'gdelt_watchlist' | 'reddit' | 'youtube'
+  source         text NOT NULL,          -- 'gdelt' | 'gdelt_watchlist' | 'reddit' | 'youtube' | 'google_news'
   source_uid     text NOT NULL,          -- platform-native stable id (e.g. reddit fullname 't3_xxx')
   url            text NOT NULL,
   normalized_url text,                   -- canonicalized URL for cross-source duplicate grouping
@@ -25,12 +25,14 @@ CREATE TABLE IF NOT EXISTS mention (
   fetched_at     timestamptz NOT NULL DEFAULT now(),
   sentiment      text,                   -- NULL for v1 (deferred); kept for forward-compat
   status         text NOT NULL DEFAULT 'new',  -- 'new' | 'reviewed' | 'dismissed'
+  title_match    boolean,                -- google_news only: keyword found in title (UI sort hint, never a filter)
   UNIQUE (source, source_uid)
 );
 
 -- Migration for pre-existing installs (CREATE TABLE IF NOT EXISTS above is a
 -- no-op once the table exists, so new columns need an explicit ADD).
 ALTER TABLE mention ADD COLUMN IF NOT EXISTS normalized_url text;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS title_match boolean;
 
 CREATE INDEX IF NOT EXISTS mention_fetched_idx  ON mention (fetched_at DESC);
 CREATE INDEX IF NOT EXISTS mention_source_idx   ON mention (source);
