@@ -8,6 +8,7 @@ const EXCLUDED_LABEL: Record<string, string> = {
   obituary: "excluded: obituary",
   "owned-channel": "excluded: owned channel",
   "reupload-channel": "excluded: reupload channel",
+  "other-church-channel": "excluded: other church",
 };
 
 function fmtDate(iso: string | null): string {

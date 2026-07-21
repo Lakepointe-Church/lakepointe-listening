@@ -8,6 +8,7 @@ const OPTIONS: { id: ChannelClassification; label: string }[] = [
   { id: "reupload", label: "Reupload" },
   { id: "commentary", label: "Commentary" },
   { id: "owned", label: "Owned" },
+  { id: "other-church", label: "Other church" },
 ];
 
 /**

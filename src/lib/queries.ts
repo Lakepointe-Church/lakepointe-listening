@@ -108,6 +108,7 @@ async function readDashboard(): Promise<{
                  CASE
                    WHEN m.source = 'youtube' AND cr.classification = 'owned' THEN 'owned-channel'
                    WHEN m.source = 'youtube' AND cr.classification = 'reupload' THEN 'reupload-channel'
+                   WHEN m.source = 'youtube' AND cr.classification = 'other-church' THEN 'other-church-channel'
                    ELSE NULL
                  END
                ) AS excluded_reason

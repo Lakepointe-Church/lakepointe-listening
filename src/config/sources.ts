@@ -23,15 +23,21 @@ export const SOURCES: SourceDef[] = [
   {
     id: "gdelt",
     label: "GDELT",
-    kind: "live",
-    blurb: "News outlets only — the tripwire backbone. No key, no daily cap.",
+    // Demoted to placeholder 2026-07-21 (Slice 6): 16/16 recorded poll_run
+    // attempts failed, every single one back to 2026-07-16 — either a
+    // straight "fetch failed" or a 429 from GDELT's shared-egress-IP rate
+    // limit. Zero mentions ever captured. Not a transient blip; treated the
+    // same as X/Meta/websearch until a working vantage point exists.
+    kind: "unavailable",
+    blurb: "Not reachable from this deployment — 0 successful pulls ever recorded.",
     slice: 2,
   },
   {
     id: "gdelt_watchlist",
     label: "GDELT Watchlist",
-    kind: "live",
-    blurb: "Watchlist domains, news only — curated outlets most likely to cover us.",
+    // Demoted alongside gdelt (same root cause) — see comment above.
+    kind: "unavailable",
+    blurb: "Not reachable from this deployment — 0 successful pulls ever recorded.",
     slice: 2,
   },
   {

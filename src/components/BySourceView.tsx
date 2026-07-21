@@ -27,7 +27,7 @@ export default function BySourceView({ health }: { health: SourceHealth[] }) {
 
       <section>
         <h2 className="mb-3 text-[12px] font-medium uppercase tracking-wide text-lp-taupe/55">
-          No free API path
+          Not connected
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {unavailable.map((def) => (

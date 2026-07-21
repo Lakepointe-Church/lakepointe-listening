@@ -69,6 +69,6 @@ CREATE TABLE IF NOT EXISTS channel_reputation (
   channel_title  text NOT NULL UNIQUE,
   channel_id     text,
   classification text NOT NULL DEFAULT 'unclassified'
-    CHECK (classification IN ('owned', 'reupload', 'commentary', 'unclassified')),
+    CHECK (classification IN ('owned', 'reupload', 'commentary', 'other-church', 'unclassified')),
   updated_at     timestamptz NOT NULL DEFAULT now()
 );

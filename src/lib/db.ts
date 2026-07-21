@@ -1,5 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import type { MentionInput } from "./pollers/types";
+import type { ChannelClassification } from "./types";
 import { normalizeUrl } from "./normalizeUrl";
 import { classifyObituary } from "./exclusions";
 import { heuristicClassification } from "./channelHeuristic";
@@ -88,9 +89,16 @@ export async function ensureSchema() {
       channel_title  text NOT NULL UNIQUE,
       channel_id     text,
       classification text NOT NULL DEFAULT 'unclassified'
-        CHECK (classification IN ('owned', 'reupload', 'commentary', 'unclassified')),
+        CHECK (classification IN ('owned', 'reupload', 'commentary', 'other-church', 'unclassified')),
       updated_at     timestamptz NOT NULL DEFAULT now()
     )
+  `;
+  // Pre-existing installs: widen the CHECK to allow 'other-church' (Slice 6
+  // follow-up) — drop-then-add is idempotent and touches no rows.
+  await sql`ALTER TABLE channel_reputation DROP CONSTRAINT IF EXISTS channel_reputation_classification_check`;
+  await sql`
+    ALTER TABLE channel_reputation ADD CONSTRAINT channel_reputation_classification_check
+      CHECK (classification IN ('owned', 'reupload', 'commentary', 'other-church', 'unclassified'))
   `;
 }
 
@@ -165,7 +173,7 @@ async function seedNewChannels(rows: MentionInput[]): Promise<void> {
 /** Manual triage override — always wins over the ingest-time heuristic. */
 export async function setChannelClassification(
   channelTitle: string,
-  classification: "owned" | "reupload" | "commentary" | "unclassified",
+  classification: ChannelClassification,
 ): Promise<void> {
   const sql = getDb();
   await sql`

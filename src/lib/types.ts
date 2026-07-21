@@ -21,7 +21,12 @@ export type Mention = {
   channel_id: string | null; // youtube only, captured going forward
 };
 
-export type ChannelClassification = "owned" | "reupload" | "commentary" | "unclassified";
+export type ChannelClassification =
+  | "owned"
+  | "reupload"
+  | "commentary"
+  | "other-church"
+  | "unclassified";
 
 export type PollStatus = "ok" | "error";
 
