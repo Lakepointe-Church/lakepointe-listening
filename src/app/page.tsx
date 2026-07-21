@@ -7,12 +7,17 @@ import { hasDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { mentions, health } = await getDashboardData();
+  const { mentions, excludedMentions, health } = await getDashboardData();
 
   // Manual refresh runs the live pollers, which need a database to persist into.
   const pollEnabled = hasDb();
 
   return (
-    <Dashboard mentions={mentions} health={health} pollEnabled={pollEnabled} />
+    <Dashboard
+      mentions={mentions}
+      excludedMentions={excludedMentions}
+      health={health}
+      pollEnabled={pollEnabled}
+    />
   );
 }

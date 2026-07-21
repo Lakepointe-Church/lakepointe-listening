@@ -31,6 +31,7 @@ export type YouTubeSearchItem = {
     title?: string;
     description?: string;
     channelTitle?: string;
+    channelId?: string;
   };
 };
 

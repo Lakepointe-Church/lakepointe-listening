@@ -59,6 +59,7 @@ export const gdeltPoller: Poller = {
         author: null, // GDELT artlist carries no author
         query_matched: matchedKeyword(title),
         published_at: parseSeendate(a.seendate),
+        domain: a.domain ?? null,
       });
     }
     return { mentions: out };

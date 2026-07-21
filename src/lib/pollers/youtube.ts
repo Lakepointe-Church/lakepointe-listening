@@ -39,6 +39,7 @@ export const youtubePoller: Poller = {
           author: s.channelTitle?.trim() || null,
           query_matched: keyword,
           published_at: s.publishedAt ?? null,
+          channel_id: s.channelId?.trim() || null,
         });
       }
     }

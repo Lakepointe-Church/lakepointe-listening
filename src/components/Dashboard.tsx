@@ -6,27 +6,26 @@ import RefreshButton from "./RefreshButton";
 import ErrorBanner from "./ErrorBanner";
 import FeedView from "./FeedView";
 import BySourceView from "./BySourceView";
-import ReviewView from "./ReviewView";
 
-type Tab = "feed" | "bysource" | "review";
+type Tab = "feed" | "bysource";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "feed", label: "Feed" },
-  { id: "bysource", label: "By source" },
-  { id: "review", label: "Review queue" },
+  { id: "bysource", label: "Connected sources" },
 ];
 
 export default function Dashboard({
   mentions,
+  excludedMentions,
   health,
   pollEnabled,
 }: {
   mentions: Mention[];
+  excludedMentions: Mention[];
   health: SourceHealth[];
   pollEnabled: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("feed");
-  const reviewCount = mentions.filter((m) => m.status === "new").length;
 
   return (
     <div>
@@ -59,11 +58,6 @@ export default function Dashboard({
               }`}
             >
               {t.label}
-              {t.id === "review" && reviewCount > 0 && (
-                <span className="ml-1.5 rounded-full bg-lp-orange/20 px-1.5 py-0.5 text-[11px] text-lp-orange">
-                  {reviewCount}
-                </span>
-              )}
               {active && (
                 <span className="absolute inset-x-0 -bottom-px h-0.5 bg-lp-orange" />
               )}
@@ -72,9 +66,10 @@ export default function Dashboard({
         })}
       </nav>
 
-      {tab === "feed" && <FeedView mentions={mentions} />}
+      {tab === "feed" && (
+        <FeedView mentions={mentions} excludedMentions={excludedMentions} />
+      )}
       {tab === "bysource" && <BySourceView health={health} />}
-      {tab === "review" && <ReviewView mentions={mentions} />}
     </div>
   );
 }

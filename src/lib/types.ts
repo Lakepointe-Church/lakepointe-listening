@@ -17,7 +17,11 @@ export type Mention = {
   status: MentionStatus;
   title_match: boolean | null; // google_news only
   subreddit: string | null; // reddit only
+  excluded_reason: string | null; // 'obituary' | 'owned-channel' | 'reupload-channel' | null
+  channel_id: string | null; // youtube only, captured going forward
 };
+
+export type ChannelClassification = "owned" | "reupload" | "commentary" | "unclassified";
 
 export type PollStatus = "ok" | "error";
 

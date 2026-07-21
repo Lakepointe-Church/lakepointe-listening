@@ -86,10 +86,44 @@ export const SOURCES: SourceDef[] = [
  * Brand terms every poller searches for. Single source of truth — pollers
  * must not hardcode terms. Includes the legacy "Lake Pointe" (two-word)
  * styling still in the wild.
+ *
+ * "Live Free" is qualified with "Josh Howerton" — bare "Live Free" is far
+ * too generic a phrase to poll on its own (Slice 6, approved).
  */
 export const KEYWORDS = [
   '"Lakepointe Church"',
   '"Lake Pointe Church"',
   '"Josh Howerton"',
+  '"Live Free" "Josh Howerton"',
 ] as const;
 export type Keyword = (typeof KEYWORDS)[number];
+
+/**
+ * Feed keyword-filter groups (Slice 6). Maps a filter chip to the exact
+ * `mention.query_matched` values it covers — explicit config, not
+ * fuzzy-matching, so variant styling ("Lakepointe Church" / "Lake Pointe
+ * Church") groups under one chip without any string heuristics at read time.
+ *
+ * GDELT's combined-sweep rows (`query_matched` = "keyword (combined)" or
+ * "watchlist") don't map to a single phrase and are intentionally left out —
+ * they only show up under "All".
+ */
+export type KeywordFilterId = "lakepointe" | "howerton" | "live-free";
+
+export const KEYWORD_FILTERS: { id: KeywordFilterId; label: string; queryMatched: string[] }[] = [
+  {
+    id: "lakepointe",
+    label: "Lakepointe Church",
+    queryMatched: ['"Lakepointe Church"', '"Lake Pointe Church"'],
+  },
+  {
+    id: "howerton",
+    label: "Josh Howerton",
+    queryMatched: ['"Josh Howerton"'],
+  },
+  {
+    id: "live-free",
+    label: "Live Free",
+    queryMatched: ['"Live Free" "Josh Howerton"'],
+  },
+];

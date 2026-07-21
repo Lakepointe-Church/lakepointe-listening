@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { runPoll, type SourceResult } from "@/lib/poll/orchestrator";
+import { setChannelClassification } from "@/lib/db";
+import type { ChannelClassification } from "@/lib/types";
 
 /**
  * Manual "Refresh now" trigger. Executes server-side (same-origin /
@@ -28,6 +30,16 @@ export async function refreshNow() {
     newTotal,
     errors: errors.map((e) => `${e.source}: ${e.error_message}`),
   };
+}
+
+/**
+ * YouTube channel triage (Slice 6, Phase 4). Applies to all existing and
+ * future items from that channel — classification is joined at read time
+ * (see queries.ts), never rewritten onto historical mention rows.
+ */
+export async function classifyChannel(channelTitle: string, classification: ChannelClassification) {
+  await setChannelClassification(channelTitle, classification);
+  revalidatePath("/");
 }
 
 async function pollViaRoute(): Promise<SourceResult[]> {

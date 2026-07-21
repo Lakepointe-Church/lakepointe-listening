@@ -24,11 +24,13 @@ function deriveState(run: PollRun | null): SourceHealthState {
  */
 export async function getDashboardData(): Promise<{
   mentions: Mention[];
+  excludedMentions: Mention[];
   health: SourceHealth[];
 }> {
   if (!hasDb()) {
     return {
       mentions: [],
+      excludedMentions: [],
       health: SOURCES.map((s) => ({
         source: s.id,
         state: "never" as const,
@@ -37,7 +39,7 @@ export async function getDashboardData(): Promise<{
     };
   }
 
-  let rows: { mentions: Mention[]; latestRuns: PollRun[] };
+  let rows: { mentions: Mention[]; excludedMentions: Mention[]; latestRuns: PollRun[] };
   try {
     rows = await readDashboard();
   } catch (err) {
@@ -49,7 +51,7 @@ export async function getDashboardData(): Promise<{
     await ensureSchema();
     rows = await readDashboard();
   }
-  const { mentions, latestRuns } = rows;
+  const { mentions, excludedMentions, latestRuns } = rows;
 
   const runBySource = new Map(latestRuns.map((r) => [r.source, r]));
   const health: SourceHealth[] = SOURCES.map((s) => {
@@ -63,12 +65,13 @@ export async function getDashboardData(): Promise<{
     return { source: s.id, state: deriveState(run), lastRun: run };
   });
 
-  return { mentions, health };
+  return { mentions, excludedMentions, health };
 }
 
-/** The dashboard's two reads, separated so the bootstrap path can retry them. */
+/** The dashboard's reads, separated so the bootstrap path can retry them. */
 async function readDashboard(): Promise<{
   mentions: Mention[];
+  excludedMentions: Mention[];
   latestRuns: PollRun[];
 }> {
   const sql = getDb();
@@ -79,18 +82,46 @@ async function readDashboard(): Promise<{
   // there in the table — a flat top-200-across-everything cap was found
   // live to zero out Google News (177 real rows) and nearly zero out Reddit
   // (55 real rows) despite both having just been freshly polled.
-  const mentions = (await sql`
+  //
+  // excluded_reason is computed here, not just read: a stored 'obituary'
+  // value passes through as-is, but owned/reupload-channel exclusion is
+  // derived live from channel_reputation via LEFT JOIN (not stored on the
+  // row) so reclassifying a channel retroactively changes visibility for
+  // all of its existing mentions with no backfill. Partitioning by
+  // (source, excluded_reason IS NULL) gives the active feed and the audit
+  // toggle each their own top-200-per-source, from one table scan.
+  const rows = (await sql`
     SELECT id, source, source_uid, url, title, excerpt, author,
-           query_matched, published_at, fetched_at, sentiment, status, title_match, subreddit
+           query_matched, published_at, fetched_at, sentiment, status,
+           title_match, subreddit, channel_id, excluded_reason
     FROM (
-      SELECT *, ROW_NUMBER() OVER (
-        PARTITION BY source ORDER BY COALESCE(published_at, fetched_at) DESC
+      SELECT scored.*, ROW_NUMBER() OVER (
+        PARTITION BY scored.source, (scored.excluded_reason IS NULL)
+        ORDER BY COALESCE(scored.published_at, scored.fetched_at) DESC
       ) AS rn
-      FROM mention
+      FROM (
+        SELECT m.id, m.source, m.source_uid, m.url, m.title, m.excerpt, m.author,
+               m.query_matched, m.published_at, m.fetched_at, m.sentiment, m.status,
+               m.title_match, m.subreddit, m.channel_id,
+               COALESCE(
+                 m.excluded_reason,
+                 CASE
+                   WHEN m.source = 'youtube' AND cr.classification = 'owned' THEN 'owned-channel'
+                   WHEN m.source = 'youtube' AND cr.classification = 'reupload' THEN 'reupload-channel'
+                   ELSE NULL
+                 END
+               ) AS excluded_reason
+        FROM mention m
+        LEFT JOIN channel_reputation cr
+          ON m.source = 'youtube' AND cr.channel_title = m.author
+      ) scored
     ) ranked
     WHERE rn <= 200
     ORDER BY COALESCE(published_at, fetched_at) DESC
   `) as Mention[];
+
+  const mentions = rows.filter((m) => m.excluded_reason === null);
+  const excludedMentions = rows.filter((m) => m.excluded_reason !== null);
 
   // Most-recent run per source via DISTINCT ON.
   const latestRuns = (await sql`
@@ -100,5 +131,5 @@ async function readDashboard(): Promise<{
     ORDER BY source, ran_at DESC
   `) as PollRun[];
 
-  return { mentions, latestRuns };
+  return { mentions, excludedMentions, latestRuns };
 }

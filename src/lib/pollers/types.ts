@@ -12,6 +12,8 @@ export type MentionInput = {
   published_at: string | null; // ISO 8601, or null if the source has no date
   title_match?: boolean; // google_news only: keyword found in title (UI sort hint, never a filter)
   subreddit?: string | null; // reddit only: bare subreddit name from <category term>
+  domain?: string | null; // google_news / gdelt / gdelt_watchlist: publisher domain, for exclusion rules
+  channel_id?: string | null; // youtube only: stable channel id, captured going forward (legacy rows have none)
 };
 
 /**

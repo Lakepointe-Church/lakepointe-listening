@@ -1,6 +1,8 @@
 import { neon } from "@neondatabase/serverless";
 import type { MentionInput } from "./pollers/types";
 import { normalizeUrl } from "./normalizeUrl";
+import { classifyObituary } from "./exclusions";
+import { heuristicClassification } from "./channelHeuristic";
 
 /** Lazily build a Neon SQL client. Throws loudly if the DB URL is unset. */
 export function getDb() {
@@ -54,11 +56,14 @@ export async function ensureSchema() {
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS normalized_url text`;
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS title_match boolean`;
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS subreddit text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS excluded_reason text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS channel_id text`;
 
   await sql`CREATE INDEX IF NOT EXISTS mention_fetched_idx  ON mention (fetched_at DESC)`;
   await sql`CREATE INDEX IF NOT EXISTS mention_source_idx   ON mention (source)`;
   await sql`CREATE INDEX IF NOT EXISTS mention_status_idx   ON mention (status)`;
   await sql`CREATE INDEX IF NOT EXISTS mention_norm_url_idx ON mention (normalized_url)`;
+  await sql`CREATE INDEX IF NOT EXISTS mention_excluded_idx ON mention (excluded_reason)`;
 
   await sql`
     CREATE TABLE IF NOT EXISTS poll_run (
@@ -72,6 +77,21 @@ export async function ensureSchema() {
     )
   `;
   await sql`CREATE INDEX IF NOT EXISTS poll_run_source_idx ON poll_run (source, ran_at DESC)`;
+
+  // channel_title is the join key (not channel_id): every historical YouTube
+  // row only ever captured the channel title, so title has to stay the
+  // reliable, universal identity — channel_id is stored as best-effort extra
+  // metadata for rows ingested going forward, not used for matching yet.
+  await sql`
+    CREATE TABLE IF NOT EXISTS channel_reputation (
+      id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      channel_title  text NOT NULL UNIQUE,
+      channel_id     text,
+      classification text NOT NULL DEFAULT 'unclassified'
+        CHECK (classification IN ('owned', 'reupload', 'commentary', 'unclassified')),
+      updated_at     timestamptz NOT NULL DEFAULT now()
+    )
+  `;
 }
 
 /**
@@ -79,6 +99,13 @@ export async function ensureSchema() {
  * Uses ON CONFLICT DO NOTHING and RETURNING so the row count reflects ONLY
  * actually-inserted (new) rows — that's the `new_mentions` figure. One round
  * trip via UNNEST, regardless of batch size. Returns the new-mention count.
+ *
+ * Also seeds `channel_reputation` for any brand-new YouTube channel in this
+ * batch (ON CONFLICT DO NOTHING — never overwrites a channel a human has
+ * already triaged). Owned/reupload-channel exclusion itself is NOT baked
+ * into `excluded_reason` here — it's applied via a JOIN at read time (see
+ * queries.ts) so reclassifying a channel later retroactively changes
+ * visibility for all of its existing rows without a backfill.
  */
 export async function insertMentions(rows: MentionInput[]): Promise<number> {
   if (rows.length === 0) return 0;
@@ -86,10 +113,10 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
 
   const inserted = (await sql.query(
     `INSERT INTO mention
-       (source, source_uid, url, normalized_url, title, excerpt, author, query_matched, published_at, title_match, subreddit)
+       (source, source_uid, url, normalized_url, title, excerpt, author, query_matched, published_at, title_match, subreddit, excluded_reason, channel_id)
      SELECT * FROM UNNEST(
        $1::text[], $2::text[], $3::text[], $4::text[],
-       $5::text[], $6::text[], $7::text[], $8::text[], $9::timestamptz[], $10::boolean[], $11::text[]
+       $5::text[], $6::text[], $7::text[], $8::text[], $9::timestamptz[], $10::boolean[], $11::text[], $12::text[], $13::text[]
      )
      ON CONFLICT (source, source_uid) DO NOTHING
      RETURNING id`,
@@ -105,10 +132,48 @@ export async function insertMentions(rows: MentionInput[]): Promise<number> {
       rows.map((r) => r.published_at),
       rows.map((r) => r.title_match ?? null),
       rows.map((r) => r.subreddit ?? null),
+      rows.map((r) => classifyObituary(r.title, r.domain ?? null)),
+      rows.map((r) => r.channel_id ?? null),
     ],
   )) as { id: string }[];
 
+  await seedNewChannels(rows);
+
   return inserted.length;
+}
+
+/** Upsert a heuristic-default row for any YouTube channel not already in channel_reputation. */
+async function seedNewChannels(rows: MentionInput[]): Promise<void> {
+  const titles = [
+    ...new Set(
+      rows
+        .filter((r) => r.source === "youtube" && r.author)
+        .map((r) => r.author as string),
+    ),
+  ];
+  if (titles.length === 0) return;
+  const sql = getDb();
+
+  await sql.query(
+    `INSERT INTO channel_reputation (channel_title, classification)
+     SELECT * FROM UNNEST($1::text[], $2::text[])
+     ON CONFLICT (channel_title) DO NOTHING`,
+    [titles, titles.map((t) => heuristicClassification(t))],
+  );
+}
+
+/** Manual triage override — always wins over the ingest-time heuristic. */
+export async function setChannelClassification(
+  channelTitle: string,
+  classification: "owned" | "reupload" | "commentary" | "unclassified",
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    INSERT INTO channel_reputation (channel_title, classification)
+    VALUES (${channelTitle}, ${classification})
+    ON CONFLICT (channel_title)
+    DO UPDATE SET classification = ${classification}, updated_at = now()
+  `;
 }
 
 /** Record one poll_run row (the loud ok|error health signal for a source). */

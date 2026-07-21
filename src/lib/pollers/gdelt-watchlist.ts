@@ -81,6 +81,7 @@ export const gdeltWatchlistPoller: Poller = {
           author: null,
           query_matched: "watchlist",
           published_at: parseSeendate(a.seendate),
+          domain: a.domain ?? null,
         });
       }
     }

@@ -1,7 +1,14 @@
 import type { Mention } from "@/lib/types";
 import { SOURCES } from "@/config/sources";
+import ChannelTriage from "./ChannelTriage";
 
 const SOURCE_LABEL = Object.fromEntries(SOURCES.map((s) => [s.id, s.label]));
+
+const EXCLUDED_LABEL: Record<string, string> = {
+  obituary: "excluded: obituary",
+  "owned-channel": "excluded: owned channel",
+  "reupload-channel": "excluded: reupload channel",
+};
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "date unknown";
@@ -22,10 +29,9 @@ export default function MentionCard({ m }: { m: Mention }) {
         <span className="rounded-full bg-lp-orange/15 px-2 py-0.5 text-lp-orange">
           {m.query_matched}
         </span>
-        {m.status === "new" && (
-          <span className="flex items-center gap-1 text-lp-orange">
-            <span className="h-1.5 w-1.5 rounded-full bg-lp-orange" />
-            new
+        {m.excluded_reason && (
+          <span className="rounded-full border border-lp-taupe/20 px-2 py-0.5 text-lp-taupe/55">
+            {EXCLUDED_LABEL[m.excluded_reason] ?? `excluded: ${m.excluded_reason}`}
           </span>
         )}
         <span className="ml-auto text-lp-taupe/50">{fmtDate(m.published_at)}</span>
@@ -50,6 +56,10 @@ export default function MentionCard({ m }: { m: Mention }) {
 
       {m.author && (
         <p className="mt-2 text-[12px] text-lp-taupe/50">by {m.author}</p>
+      )}
+
+      {m.source === "youtube" && m.author && (
+        <ChannelTriage channelTitle={m.author} />
       )}
     </article>
   );

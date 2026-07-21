@@ -61,6 +61,7 @@ export const googleNewsPoller: Poller = {
           query_matched: keyword,
           published_at: parsePubDate(item.pubDate),
           title_match: title ? title.toLowerCase().includes(bareKeyword) : false,
+          domain,
         });
       }
     }
