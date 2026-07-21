@@ -21,6 +21,12 @@ function contentText(e: RedditEntry): string | null {
 export const redditPoller: Poller = {
   id: "reddit",
   label: "Reddit",
+  // Every successful call leaves x-ratelimit-remaining at 0, so every
+  // keyword after the first needs the client's wait-and-retry. Observed
+  // live reset windows ranged 14-58s across two test runs (variable, not a
+  // fixed ~20s) — worst case is 2 keywords each waiting the client's 60s
+  // cap, well past the default 60s budget.
+  budgetMs: 160_000,
   async run() {
     const out: MentionInput[] = [];
     let skippedCommunities = 0;
