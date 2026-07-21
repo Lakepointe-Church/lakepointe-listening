@@ -73,12 +73,23 @@ async function readDashboard(): Promise<{
 }> {
   const sql = getDb();
 
+  // Per-source cap (not a flat overall LIMIT): a high-volume source like
+  // YouTube would otherwise crowd a low-volume one like Reddit or Google
+  // News out of the feed entirely, even though their rows are sitting right
+  // there in the table — a flat top-200-across-everything cap was found
+  // live to zero out Google News (177 real rows) and nearly zero out Reddit
+  // (55 real rows) despite both having just been freshly polled.
   const mentions = (await sql`
     SELECT id, source, source_uid, url, title, excerpt, author,
            query_matched, published_at, fetched_at, sentiment, status, title_match, subreddit
-    FROM mention
+    FROM (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY source ORDER BY COALESCE(published_at, fetched_at) DESC
+      ) AS rn
+      FROM mention
+    ) ranked
+    WHERE rn <= 200
     ORDER BY COALESCE(published_at, fetched_at) DESC
-    LIMIT 200
   `) as Mention[];
 
   // Most-recent run per source via DISTINCT ON.
