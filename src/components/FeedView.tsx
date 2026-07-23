@@ -66,11 +66,16 @@ export default function FeedView({
   excludedMentions,
   windowId,
   truncatedSources,
+  attentionOnly = false,
+  onClearAttentionOnly,
 }: {
   mentions: Mention[];
   excludedMentions: Mention[];
   windowId: WindowId;
   truncatedSources: string[];
+  /** Drill-down from the summary strip's "needing attention" count (Slice 7). */
+  attentionOnly?: boolean;
+  onClearAttentionOnly?: () => void;
 }) {
   const router = useRouter();
   const [source, setSource] = useState<SourceFilter>("all");
@@ -99,7 +104,8 @@ export default function FeedView({
   const keywordGroup = KEYWORD_FILTERS.find((f) => f.id === keyword);
   const matchesFilters = (m: Mention) =>
     (source === "all" || m.source === source) &&
-    (!keywordGroup || keywordGroup.queryMatched.includes(m.query_matched));
+    (!keywordGroup || keywordGroup.queryMatched.includes(m.query_matched)) &&
+    (!attentionOnly || m.entity_classification === "commentary");
 
   const filtered = mentions.filter(matchesFilters);
   const filteredExcluded = excludedMentions.filter(matchesFilters);
@@ -143,6 +149,23 @@ export default function FeedView({
         </p>
       )}
 
+      {attentionOnly && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="flex items-center gap-1.5 rounded-full border border-lp-orange/40 bg-lp-orange/15 px-3 py-1 text-[12px] font-medium text-lp-orange">
+            Needs attention
+            {onClearAttentionOnly && (
+              <button
+                onClick={onClearAttentionOnly}
+                aria-label="Clear needs-attention filter"
+                className="text-lp-orange/70 hover:text-lp-orange"
+              >
+                ✕
+              </button>
+            )}
+          </span>
+        </div>
+      )}
+
       <div className="mb-2 flex flex-wrap gap-2">
         <FilterPill
           label="All"
@@ -182,7 +205,11 @@ export default function FeedView({
       {filtered.length === 0 ? (
         <EmptyState
           title="No mentions match these filters"
-          hint="Try a different source or keyword, or switch back to All."
+          hint={
+            attentionOnly
+              ? "No commentary-classified items in the last 7 days. Clear the “Needs attention” filter to see everything."
+              : "Try a different source or keyword, or switch back to All."
+          }
         />
       ) : (
         <div className="space-y-4">

@@ -16,7 +16,13 @@ function trend(current: number, prior: number): string {
  * hence the tooltip on the volume figure). Brand-neutral: metadata, not a
  * call to action, so no orange here.
  */
-export default function SummaryStrip({ summary }: { summary: SummaryStats }) {
+export default function SummaryStrip({
+  summary,
+  onNeedsAttentionClick,
+}: {
+  summary: SummaryStats;
+  onNeedsAttentionClick?: () => void;
+}) {
   const { currentWeekTotal, priorWeekTotal, bySource, needsAttention } = summary;
 
   return (
@@ -40,9 +46,17 @@ export default function SummaryStrip({ summary }: { summary: SummaryStats }) {
         </span>
       )}
 
-      <span className="text-lp-taupe/55">
-        {needsAttention} needing attention
-      </span>
+      {onNeedsAttentionClick && needsAttention > 0 ? (
+        <button
+          onClick={onNeedsAttentionClick}
+          className="text-lp-taupe/55 underline decoration-lp-taupe/30 underline-offset-2 transition hover:text-lp-taupe hover:decoration-lp-taupe/60"
+          title="Show these in the feed, filtered to commentary-classified sources, last 7 days"
+        >
+          {needsAttention} needing attention
+        </button>
+      ) : (
+        <span className="text-lp-taupe/55">{needsAttention} needing attention</span>
+      )}
     </div>
   );
 }

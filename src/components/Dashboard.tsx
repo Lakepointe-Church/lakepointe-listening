@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Mention, SourceHealth, SummaryStats } from "@/lib/types";
 import type { WindowId } from "@/lib/timeWindow";
 import RefreshButton from "./RefreshButton";
@@ -33,7 +34,18 @@ export default function Dashboard({
   truncatedSources: string[];
   summary: SummaryStats;
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("feed");
+  const [attentionOnly, setAttentionOnly] = useState(false);
+
+  // "Needing attention" is always trailing-7-days (see SummaryStrip) — force
+  // the feed to the matching 7d window so the drill-down list can't show
+  // more items than the number the user just clicked.
+  function handleNeedsAttentionClick() {
+    setTab("feed");
+    setAttentionOnly(true);
+    if (windowId !== "7d") router.push("/");
+  }
 
   return (
     <div>
@@ -51,7 +63,7 @@ export default function Dashboard({
       </header>
 
       <ErrorBanner health={health} />
-      <SummaryStrip summary={summary} />
+      <SummaryStrip summary={summary} onNeedsAttentionClick={handleNeedsAttentionClick} />
 
       <nav className="mb-6 flex gap-1 border-b border-lp-taupe/15">
         {TABS.map((t) => {
@@ -81,6 +93,8 @@ export default function Dashboard({
           excludedMentions={excludedMentions}
           windowId={windowId}
           truncatedSources={truncatedSources}
+          attentionOnly={attentionOnly}
+          onClearAttentionOnly={() => setAttentionOnly(false)}
         />
       )}
       {tab === "bysource" && <BySourceView health={health} />}
