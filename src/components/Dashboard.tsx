@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Mention, SourceHealth, SummaryStats } from "@/lib/types";
 import type { WindowId } from "@/lib/timeWindow";
 import RefreshButton from "./RefreshButton";
-import ErrorBanner from "./ErrorBanner";
+import SourceStatusLine from "./SourceStatusLine";
 import SummaryStrip from "./SummaryStrip";
 import FeedView from "./FeedView";
 import BySourceView from "./BySourceView";
@@ -62,7 +62,7 @@ export default function Dashboard({
         <RefreshButton enabled={pollEnabled} />
       </header>
 
-      <ErrorBanner health={health} />
+      <SourceStatusLine health={health} />
       <SummaryStrip summary={summary} onNeedsAttentionClick={handleNeedsAttentionClick} />
 
       <nav className="mb-6 flex gap-1 border-b border-lp-taupe/15">

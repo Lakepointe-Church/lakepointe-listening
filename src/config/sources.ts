@@ -9,7 +9,7 @@
  * Pollers are wired in later slices; in Slice 1 every live source reads as
  * "not yet polled".
  */
-export type SourceKind = "live" | "unavailable";
+export type SourceKind = "live" | "degraded" | "unavailable";
 
 export type SourceDef = {
   id: string; // matches mention.source / poll_run.source
@@ -23,12 +23,15 @@ export const SOURCES: SourceDef[] = [
   {
     id: "gdelt",
     label: "GDELT",
-    // Demoted to placeholder 2026-07-21 (Slice 6): 16/16 recorded poll_run
-    // attempts failed, every single one back to 2026-07-16 — either a
-    // straight "fetch failed" or a 429 from GDELT's shared-egress-IP rate
-    // limit. Zero mentions ever captured. Not a transient blip; treated the
-    // same as X/Meta/websearch until a working vantage point exists.
-    kind: "unavailable",
+    // Demoted 2026-07-21 (Slice 6): 16/16 recorded poll_run attempts failed,
+    // every single one back to 2026-07-16 — either a straight "fetch failed"
+    // or a 429 from GDELT's shared-egress-IP rate limit. Zero mentions ever
+    // captured. Reclassified "unavailable" -> "degraded" in Slice 7 Phase 6:
+    // unlike X/Meta/websearch (no free API path exists, full stop), GDELT
+    // has a real, working poller (left in place, not deleted) that's simply
+    // paused on this known, documented issue — a status line should say so
+    // calmly rather than lump it in with "not connected."
+    kind: "degraded",
     blurb: "Not reachable from this deployment — 0 successful pulls ever recorded.",
     slice: 2,
   },
@@ -36,7 +39,7 @@ export const SOURCES: SourceDef[] = [
     id: "gdelt_watchlist",
     label: "GDELT Watchlist",
     // Demoted alongside gdelt (same root cause) — see comment above.
-    kind: "unavailable",
+    kind: "degraded",
     blurb: "Not reachable from this deployment — 0 successful pulls ever recorded.",
     slice: 2,
   },

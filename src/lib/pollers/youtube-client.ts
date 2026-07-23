@@ -1,4 +1,5 @@
 import "server-only";
+import { formatPollError } from "./formatPollError";
 
 /**
  * YouTube Data API v3 search.list client.
@@ -62,8 +63,8 @@ export async function fetchYouTubeVideos(keyword: string): Promise<YouTubeSearch
   const body = await res.text();
 
   if (!res.ok) {
-    // Trim the error body and make sure the key can't leak into poll_run rows.
-    const detail = body.replace(apiKey, "<redacted>").slice(0, 300);
+    // Redact the key before formatting so it can't leak into poll_run rows.
+    const detail = formatPollError(body.replace(apiKey, "<redacted>"));
     throw new Error(`YouTube HTTP ${res.status} for ${keyword}: ${detail}`);
   }
 
@@ -71,7 +72,7 @@ export async function fetchYouTubeVideos(keyword: string): Promise<YouTubeSearch
   try {
     json = JSON.parse(body);
   } catch {
-    throw new Error(`YouTube non-JSON response for ${keyword}: ${body.slice(0, 160)}`);
+    throw new Error(`YouTube non-JSON response for ${keyword}: ${formatPollError(body)}`);
   }
   return json.items ?? [];
 }

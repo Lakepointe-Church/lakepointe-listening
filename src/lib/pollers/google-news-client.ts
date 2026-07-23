@@ -1,5 +1,6 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
+import { formatPollError } from "./formatPollError";
 
 /**
  * Google News search RSS client — no auth, no key. Verified live 2026-07-16
@@ -77,7 +78,7 @@ export async function fetchGoogleNewsItems(query: string): Promise<GoogleNewsIte
   const body = await res.text();
 
   if (!res.ok) {
-    throw new Error(`Google News RSS HTTP ${res.status} for "${query}": ${body.slice(0, 160)}`);
+    throw new Error(`Google News RSS HTTP ${res.status} for "${query}": ${formatPollError(body)}`);
   }
 
   let parsed: { rss?: { channel?: { item?: GoogleNewsItem | GoogleNewsItem[] } } };
@@ -90,7 +91,7 @@ export async function fetchGoogleNewsItems(query: string): Promise<GoogleNewsIte
   }
   if (!parsed.rss?.channel) {
     throw new Error(
-      `Google News RSS returned an unexpected shape for "${query}" (no rss.channel): ${body.slice(0, 160)}`,
+      `Google News RSS returned an unexpected shape for "${query}" (no rss.channel): ${formatPollError(body)}`,
     );
   }
 

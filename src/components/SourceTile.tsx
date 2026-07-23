@@ -46,6 +46,23 @@ export default function SourceTile({
     );
   }
 
+  // Has a real, working poller but is paused on a known, documented issue
+  // (Slice 7 Phase 6) — distinct from "unavailable" (no free path exists at
+  // all). Calm framing: this isn't a fresh alert, it's an accepted state.
+  if (def.kind === "degraded") {
+    return (
+      <div className="rounded-xl border border-dashed border-lp-orange/25 bg-lp-surface/40 p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium text-lp-taupe">{def.label}</h3>
+          <span className="rounded-full border border-lp-orange/30 px-2 py-0.5 text-[11px] uppercase tracking-wide text-lp-orange/70">
+            Degraded — known issue
+          </span>
+        </div>
+        <p className="mt-2 text-[13px] leading-snug text-lp-taupe/55">{def.blurb}</p>
+      </div>
+    );
+  }
+
   const state = health?.state ?? "never";
   const meta = STATE_META[state];
   const lastRun = health?.lastRun ?? null;

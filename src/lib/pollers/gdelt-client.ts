@@ -1,4 +1,5 @@
 import "server-only";
+import { formatPollError } from "./formatPollError";
 
 /**
  * Shared GDELT DOC 2.0 fetch helper, used by both the keyword sweep
@@ -99,18 +100,18 @@ export async function fetchGdeltArticles(query: string): Promise<GdeltArticle[]>
       }
       cooldownUntil = Date.now() + COOLDOWN_MS;
       throw new GdeltRateLimitError(
-        `GDELT rate limit for "${query}" (persisted through one ${RETRY_AFTER_429_MS / 1000}s retry): ${body.slice(0, 160)}`,
+        `GDELT rate limit for "${query}" (persisted through one ${RETRY_AFTER_429_MS / 1000}s retry): ${formatPollError(body)}`,
       );
     }
     if (!res.ok) {
-      throw new Error(`GDELT HTTP ${res.status} for "${query}": ${body.slice(0, 160)}`);
+      throw new Error(`GDELT HTTP ${res.status} for "${query}": ${formatPollError(body)}`);
     }
 
     let json: { articles?: GdeltArticle[] };
     try {
       json = JSON.parse(body);
     } catch {
-      throw new Error(`GDELT non-JSON response for "${query}": ${body.slice(0, 160)}`);
+      throw new Error(`GDELT non-JSON response for "${query}": ${formatPollError(body)}`);
     }
     return json.articles ?? [];
   }

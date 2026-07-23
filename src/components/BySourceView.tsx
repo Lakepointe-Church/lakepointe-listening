@@ -10,6 +10,7 @@ import SourceTile from "./SourceTile";
 export default function BySourceView({ health }: { health: SourceHealth[] }) {
   const byId = new Map(health.map((h) => [h.source, h]));
   const live = SOURCES.filter((s) => s.kind === "live");
+  const degraded = SOURCES.filter((s) => s.kind === "degraded");
   const unavailable = SOURCES.filter((s) => s.kind === "unavailable");
 
   return (
@@ -24,6 +25,19 @@ export default function BySourceView({ health }: { health: SourceHealth[] }) {
           ))}
         </div>
       </section>
+
+      {degraded.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[12px] font-medium uppercase tracking-wide text-lp-taupe/55">
+            Degraded — known issue
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {degraded.map((def) => (
+              <SourceTile key={def.id} def={def} health={byId.get(def.id)} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 text-[12px] font-medium uppercase tracking-wide text-lp-taupe/55">

@@ -1,5 +1,6 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
+import { formatPollError } from "./formatPollError";
 
 /**
  * Reddit public search RSS client (no auth — self-serve OAuth app creation is
@@ -120,7 +121,7 @@ export async function fetchRedditEntries(query: string): Promise<RedditEntry[]> 
 
     const throttledStatus = res.status === 429;
     if (!throttledStatus && !res.ok) {
-      throw new Error(`Reddit RSS HTTP ${res.status} for "${query}": ${body.slice(0, 160)}`);
+      throw new Error(`Reddit RSS HTTP ${res.status} for "${query}": ${formatPollError(body)}`);
     }
 
     let parsed: { feed?: { entry?: RedditEntry | RedditEntry[] } } = {};
@@ -137,7 +138,7 @@ export async function fetchRedditEntries(query: string): Promise<RedditEntry[]> 
       if (attempt > 0) {
         throw new RedditRateLimitError(
           `Reddit RSS rate limit for "${query}" (persisted through one retry): ` +
-            (throttledStatus ? body.slice(0, 160) : "empty/unparseable body"),
+            (throttledStatus ? formatPollError(body) : "empty/unparseable body"),
         );
       }
       await sleep(retryWaitMs(res));
