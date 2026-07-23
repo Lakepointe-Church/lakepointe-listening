@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import type { Mention, SourceHealth } from "@/lib/types";
+import type { Mention, SourceHealth, SummaryStats } from "@/lib/types";
+import type { WindowId } from "@/lib/timeWindow";
 import RefreshButton from "./RefreshButton";
 import ErrorBanner from "./ErrorBanner";
+import SummaryStrip from "./SummaryStrip";
 import FeedView from "./FeedView";
 import BySourceView from "./BySourceView";
 
@@ -19,11 +21,17 @@ export default function Dashboard({
   excludedMentions,
   health,
   pollEnabled,
+  windowId,
+  truncatedSources,
+  summary,
 }: {
   mentions: Mention[];
   excludedMentions: Mention[];
   health: SourceHealth[];
   pollEnabled: boolean;
+  windowId: WindowId;
+  truncatedSources: string[];
+  summary: SummaryStats;
 }) {
   const [tab, setTab] = useState<Tab>("feed");
 
@@ -43,6 +51,7 @@ export default function Dashboard({
       </header>
 
       <ErrorBanner health={health} />
+      <SummaryStrip summary={summary} />
 
       <nav className="mb-6 flex gap-1 border-b border-lp-taupe/15">
         {TABS.map((t) => {
@@ -67,7 +76,12 @@ export default function Dashboard({
       </nav>
 
       {tab === "feed" && (
-        <FeedView mentions={mentions} excludedMentions={excludedMentions} />
+        <FeedView
+          mentions={mentions}
+          excludedMentions={excludedMentions}
+          windowId={windowId}
+          truncatedSources={truncatedSources}
+        />
       )}
       {tab === "bysource" && <BySourceView health={health} />}
     </div>

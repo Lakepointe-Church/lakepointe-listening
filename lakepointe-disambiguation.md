@@ -103,6 +103,18 @@ Content volume is a rough estimate (High / Medium / Low) based on how much index
 |---|---|---|---|---|---|
 | LakePoint Community Church | Church | (location not verified) | lakepointcc.org | Low–Medium | https://lakepointcc.org/ |
 | The Pointe Church | Church (name-adjacent, not "Lake Pointe") | Fort Wayne, IN | thepointe.church | Low | https://www.thepointe.church/ |
+| **LakePointe City Church** | Church, active YouTube full-service reuploads | **Hot Springs, AR** (confirmed via its own Subsplash app slug `lakepointechurchhotsprin`) | subsplash.com/lakepointechurchhotsprin | Medium (weekly message uploads) | Discovered live in our own YouTube poll data 2026-07-19–21; e.g. https://www.youtube.com/watch?v=5_BhcXg36oQ |
+| Lakepoint Church | Church, weekly livestream ("no-e" spelling, distinct from the AL state park / GA sports complex "no-e" family in §3) | Not verified from poll data alone | — | Low–Medium | https://www.youtube.com/watch?v=-EtLNQMSgfg |
+| Lake Point Online | Church, online-only branding ("We point people to Jesus...") | Not verified from poll data alone | — | Low | https://www.youtube.com/watch?v=YkjvHgdbO08 |
+
+### 2h. Incidental keyword collisions (not organizations — false-positive triggers only)
+
+These aren't entities to track; they're evidence that the bare keyword phrases still throw false positives beyond the organizations above. Found live in poll data, all matched on the exact `query_matched` phrase shown (not fuzzy):
+
+| Trigger | What it actually is | Matched on | Source |
+|---|---|---|---|
+| Pokémon Go raid-coordination posts | A real-world Pokémon Go gym/landmark happens to be named "Lake Pointe Church" (not ours) in r/PokemonGoRaids trade posts (e.g. "Hosting groundon...", "Mega Tyranitar add...") | `"Lake Pointe Church"` | e.g. https://www.reddit.com/r/PokemonGoRaids/comments/1l4eak6/hosting_groundon_713881782313/ |
+| Rockwall-area local-news human-interest stories | e.g. "Rockwall High School Senior Cheer Spotlight," "Rockwall and Heath High School Cheerleaders welcome back RISD Staff" — "Lake Pointe Church" appears incidentally (sponsor credit / student affiliation), story isn't about the church | `"Lake Pointe Church"` | https://blueribbonnews.com (via Google News) |
 
 ---
 
@@ -127,7 +139,12 @@ Sources: https://joshhowerton.com/about/ , https://lakepointe.church/josh-howert
 **Other people named Josh/Joshua Howerton:** the name is fairly distinctive but **not unique**. Public-records aggregators (e.g., Radaris) list multiple ordinary individuals, and there is at least one unrelated LinkedIn profile ("Josh Howerton – Self-employed"). None of these has a *meaningful public content footprint* that I could confirm would surface in media/social listening.
 Sources: https://radaris.com/p/Josh/Howerton/ , https://www.linkedin.com/in/josh-howerton-8a934331/
 
-**Verdict:** For listening purposes, "Josh Howerton" is a low-collision term. The name alone is a reasonably strong allow-signal, but see the uncertainty note about a low-quality bio site that conflated him with another ministry.
+**REVISED 2026-07-21 — production data has falsified the "low-collision" verdict below.** Two distinct real people named Josh Howerton *do* have a meaningful, live content footprint that surfaces in this dashboard's actual feed:
+
+- **An options-trader "Josh Howerton"** posts day-trading YouTube content under the exact channel name "Josh Howerton" (`#optionstrading #livetrading #daytrading`, Linktree `thejoshhowerton`, site `the-josh-howerton-connect.netlify.app`). Confirmed live, e.g. https://www.youtube.com/watch?v=ABAA5bOj89s , https://www.youtube.com/watch?v=eXWJRf4xR1A — classified `other-church` in `channel_reputation` (soon `wrong-entity`, see Slice 7).
+- **A "Josh Howerton" who was (until ~2025-10) a police officer/chief in Farmington, AR** — two Google News articles about his successor "Wilbanks" taking over as Farmington police chief matched our `"Josh Howerton"` keyword search (the outgoing chief's name), confirming a real, distinct public figure of that name. Confirmed live: https://news.google.com/rss/articles/CBMikgFBVV95cUxQMkpORHdnRUhWSGNqRXJFZ2hyNFBDdDd3M3RKM05BeDBEQUpPbzZ0YkY3eExqdDdjMWVGQWZPaVFueG9CN1FtUDhWNzZLTnZ3OEFPYUVKSFNBSkxxc0pDTnFvUlVqOUFJb1Nubm85QVh0ZnRWVmJZRUgwcVl0eTVBZjVDQ3VsS1lhS2ZKblZaQ3Zadw (via nwaonline.com, query_matched `"Josh Howerton"`), https://news.google.com/rss/articles/CBMilAFBVV95cUxPeTR1ZDlYOWl0Z0dsLWFpNjZ2TktFdmhKd0RHNFVYWFVkRHVCRWNIT3VPVTNpSC11Ym9XNlJXQlBqM2hfR2ZFcGxMeHJUbS1rSHdhX0RWaDVHU3BiWE5Xc3BZbl9zajdkN2pKNDdudHhUVVlUSVpMOVExTlBIb2dvOFlIX1FTWFB1MUtneTJCLXJmdEMt (via wcel.nwaonline.com).
+
+**Verdict (revised):** "Josh Howerton" is **not** a low-collision term in practice — it is a common enough full name that at least two unrelated, actively-publishing people share it. The name alone is *not* a safe allow-signal on its own; per-source entity classification (Slice 7's `entity_reputation`) is the correct mitigation, not a context-term list, since these collisions surface as distinct YouTube channels / distinct news subjects rather than as distinguishing vocabulary near the name.
 
 ---
 
@@ -261,6 +278,7 @@ export const NEGATIVE_CONTEXT_TERMS: string[] = [
 - **LakePoint Community Church (lakepointcc.org):** confirmed to exist but I did **not** verify its city/state. Listed as collision but location is unknown.
 - **A low-quality biography site (ScholarsLearn)** described "Josh Howerton" as "Senior Pastor of Influencers Churches Global" with US/Australia campuses. This conflicts with every primary source and appears to be an **error/conflation**; I did not treat it as evidence of a distinct notable Josh Howerton. If you want certainty on whether a *second* prominent Josh Howerton exists in ministry, that needs a dedicated check.
 - **Exact primary domains** for LakePoint Sports and a few apartment/marina listings were not verified to the canonical site (only to directory/review aggregators), so those domain cells are blank rather than guessed.
+- **NEW 2026-07-21 — possible obituary-filter gap:** live poll data has several Google News rows (fallen Dallas/Greenville/Rockwall-area police officers) matched on `"Lake Pointe Church"` with headline phrasing like "Funeral services planned for..." / "Funeral, Procession Tuesday Honors..." — none of these match the existing obituary title patterns (`obituary`, `visitation & funeral`, `funeral information`, `funeral home`), so they are NOT currently excluded. I have **not** read the full article text to confirm whether these are (a) legitimate mentions of our Rockwall church hosting a real funeral, or (b) a different "Lake Pointe Church" entirely — flagging as unresolved rather than guessing. Worth a manual look before deciding whether to widen the obituary title-pattern list or leave these as legitimate feed items.
 
 **Searches that came up empty or thin:**
 - "Lake Pointe Church" in Ohio/Georgia/Florida/Tennessee/Louisiana/Missouri/Oxford MS/Wilson NC — no confirmed same-name churches surfaced beyond the MI one and the name-adjacent "The Pointe Church" (Fort Wayne, IN) and "LakePoint Community Church."
@@ -271,3 +289,62 @@ export const NEGATIVE_CONTEXT_TERMS: string[] = [
 - **Rowlett, TX** is our church's historical birthplace *and* the marina's area — ambiguous, kept out of both lists.
 - **"Dallas"** alone is too broad (North/East Dallas campuses use it, but so would unrelated DFW noise).
 ```
+
+---
+
+## 7. YouTube channel-reputation snapshot (pre-migration record)
+
+Snapshot of every row in the live `channel_reputation` table, taken 2026-07-21 ahead of Slice 7's migration to the source-scoped `entity_reputation` table (which rewrites `other-church` → `wrong-entity`). Recorded here so this triage knowledge survives independent of the DB table's lifecycle. Classifications reflect human triage via the feed card control unless noted.
+
+**`owned`**
+- Lakepointe Church
+
+**`commentary`** (third-party discussion/response — the actual listening signal)
+- Andrew Clemons
+- Josh Murray Reactions
+- Paulogia
+- The Rabyd Atheist
+
+**`other-church`** (will become `wrong-entity` in Slice 7 — confirmed NOT us; see §2f/§2g/§4 above for detail on each)
+- Josh Howerton *(the options-trader channel, §4)*
+- Lake Point Online
+- LakePointe City Church
+- Lakepoint Church
+
+**`reupload`** (stolen clips/full sermons rehosted, excluded from default feed)
+- Biblical Truth Daily
+- Christian Living Insights
+- Discipled Daily
+- Faith with Josh Howerton
+- For His glory
+- Found Not Lost
+- Glimpses of God's Glory
+- Howerton Teachings
+- Howerton sermons
+- Jeff Square
+- Jesus Pop Culture Ministries
+- Jesus: Light of The World
+- Josh Howerton Gospel
+- Josh Howerton Message
+- Josh Howerton Sermons
+- Josh Howerton Teachings
+- Josh Howerton Truth Voice
+- Josh Howerton teachings
+- Kingdom Living Daily
+- Lakepointe Church The Voice
+- Lakepointe Gospel
+- Lyon County Republicans
+- OBBM Network TV
+- P. Josh Howerton Podcast
+- PJH Daily Discipleship
+- PJH Faith & Power
+- PJH Living by Faith
+- PJHT Biblical Wisdom
+- PRAYER OASIS
+- Pastor Josh Messages
+- TheChristianClipsHub
+- Views for Jesus
+
+**`unclassified`** (default; shown in feed, needs human triage)
+- Between Light and Silence
+- Ryan Cunningham

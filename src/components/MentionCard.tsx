@@ -1,14 +1,15 @@
 import type { Mention } from "@/lib/types";
 import { SOURCES } from "@/config/sources";
-import ChannelTriage from "./ChannelTriage";
+import EntityTriage from "./EntityTriage";
 
 const SOURCE_LABEL = Object.fromEntries(SOURCES.map((s) => [s.id, s.label]));
 
 const EXCLUDED_LABEL: Record<string, string> = {
   obituary: "excluded: obituary",
-  "owned-channel": "excluded: owned channel",
-  "reupload-channel": "excluded: reupload channel",
-  "other-church-channel": "excluded: other church",
+  manual: "excluded: manually",
+  "owned-entity": "excluded: owned",
+  "reupload-entity": "excluded: reupload",
+  "wrong-entity": "excluded: wrong entity",
 };
 
 function fmtDate(iso: string | null): string {
@@ -59,9 +60,7 @@ export default function MentionCard({ m }: { m: Mention }) {
         <p className="mt-2 text-[12px] text-lp-taupe/50">by {m.author}</p>
       )}
 
-      {m.source === "youtube" && m.author && (
-        <ChannelTriage channelTitle={m.author} />
-      )}
+      <EntityTriage mention={m} />
     </article>
   );
 }

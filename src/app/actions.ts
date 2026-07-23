@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { runPoll, type SourceResult } from "@/lib/poll/orchestrator";
-import { setChannelClassification } from "@/lib/db";
-import type { ChannelClassification } from "@/lib/types";
+import { setEntityClassification, setManualExclude } from "@/lib/db";
+import type { EntityClassification } from "@/lib/types";
 
 /**
  * Manual "Refresh now" trigger. Executes server-side (same-origin /
@@ -33,12 +33,27 @@ export async function refreshNow() {
 }
 
 /**
- * YouTube channel triage (Slice 6, Phase 4). Applies to all existing and
- * future items from that channel — classification is joined at read time
- * (see queries.ts), never rewritten onto historical mention rows.
+ * Entity triage (Slice 6 for YouTube, generalized to Reddit/Google News in
+ * Slice 7). Applies to all existing and future items from that entity —
+ * classification is joined at read time (see queries.ts), never rewritten
+ * onto historical mention rows.
  */
-export async function classifyChannel(channelTitle: string, classification: ChannelClassification) {
-  await setChannelClassification(channelTitle, classification);
+export async function classifyEntity(
+  source: string,
+  entityKey: string,
+  classification: EntityClassification,
+) {
+  await setEntityClassification(source, entityKey, classification);
+  revalidatePath("/");
+}
+
+/**
+ * Per-item manual exclude (Slice 7) — the escape hatch for noise that
+ * doesn't map to a reusable entity (a one-off post, a single odd article).
+ * Item-level only; creates no reputation row.
+ */
+export async function excludeItem(mentionId: string) {
+  await setManualExclude(mentionId);
   revalidatePath("/");
 }
 

@@ -17,15 +17,25 @@ export type Mention = {
   status: MentionStatus;
   title_match: boolean | null; // google_news only
   subreddit: string | null; // reddit only
-  excluded_reason: string | null; // 'obituary' | 'owned-channel' | 'reupload-channel' | null
+  domain: string | null; // google_news only: publisher domain (Slice 7)
+  // Stored on the row: 'obituary' | 'manual' | null (see mention_excluded_reason_check).
+  // Entity-classification exclusions ('owned-entity' | 'reupload-entity' | 'wrong-entity')
+  // are never stored — derived live via the entity_reputation JOIN in queries.ts, so
+  // reclassifying an entity retroactively changes visibility with no backfill.
+  excluded_reason: string | null;
   channel_id: string | null; // youtube only, captured going forward
+  // Slice 7: raw entity_reputation classification (null = no row = unclassified
+  // and not yet triaged), independent of whether it results in exclusion —
+  // this is what the triage badge displays.
+  entity_classification: EntityClassification | null;
 };
 
-export type ChannelClassification =
+/** Slice 7: generalized beyond YouTube channels to any (source, entity_key) pair. */
+export type EntityClassification =
   | "owned"
   | "reupload"
   | "commentary"
-  | "other-church"
+  | "wrong-entity"
   | "unclassified";
 
 export type PollStatus = "ok" | "error";
@@ -54,4 +64,17 @@ export type SourceHealth = {
   source: string;
   state: SourceHealthState;
   lastRun: PollRun | null;
+};
+
+/**
+ * Slice 7, Phase 5 — executive summary strip. Always trailing-7-vs-prior-7
+ * from now, regardless of the feed's active time-window filter (it's a
+ * pulse, not a filter readout). Computed over non-excluded mentions only
+ * (same derived entity-classification exclusion as the feed).
+ */
+export type SummaryStats = {
+  currentWeekTotal: number;
+  priorWeekTotal: number;
+  bySource: { source: string; count: number }[]; // trailing 7 days
+  needsAttention: number; // trailing 7 days, commentary-classified entities
 };

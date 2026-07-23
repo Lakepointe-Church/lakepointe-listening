@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Mention } from "@/lib/types";
 import { KEYWORD_FILTERS, SOURCES, type KeywordFilterId } from "@/config/sources";
+import { WINDOW_IDS, WINDOW_LABELS, type WindowId } from "@/lib/timeWindow";
 import MentionCard from "./MentionCard";
 import EmptyState from "./EmptyState";
 
@@ -34,14 +36,43 @@ function FilterPill({
   );
 }
 
-/** Reverse-chronological mentions, filterable by source and keyword via pill rows. */
+/** Plain nav pill, no count — used for the time-window row (Slice 7). */
+function WindowPill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1 text-[12px] font-medium transition ${
+        active
+          ? "border-lp-orange/40 bg-lp-orange/15 text-lp-orange"
+          : "border-lp-taupe/20 text-lp-taupe/70 hover:border-lp-taupe/30 hover:text-lp-taupe"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** Reverse-chronological mentions, filterable by source, keyword, and time window via pill rows. */
 export default function FeedView({
   mentions,
   excludedMentions,
+  windowId,
+  truncatedSources,
 }: {
   mentions: Mention[];
   excludedMentions: Mention[];
+  windowId: WindowId;
+  truncatedSources: string[];
 }) {
+  const router = useRouter();
   const [source, setSource] = useState<SourceFilter>("all");
   const [keyword, setKeyword] = useState<KeywordFilter>("all");
   const [showExcluded, setShowExcluded] = useState(false);
@@ -73,17 +104,45 @@ export default function FeedView({
   const filtered = mentions.filter(matchesFilters);
   const filteredExcluded = excludedMentions.filter(matchesFilters);
 
+  // Server-computed window (Slice 7, Phase 3/4) — switching windows navigates
+  // so `mentions`/`excludedMentions` arrive pre-filtered from the server;
+  // every count derived from them below is already window-consistent.
+  const timeWindowRow = (
+    <div className="mb-2 flex flex-wrap gap-2">
+      {WINDOW_IDS.map((id) => (
+        <WindowPill
+          key={id}
+          label={WINDOW_LABELS[id]}
+          active={id === windowId}
+          onClick={() => router.push(id === "7d" ? "/" : `/?window=${id}`)}
+        />
+      ))}
+    </div>
+  );
+
   if (mentions.length === 0 && excludedMentions.length === 0) {
     return (
-      <EmptyState
-        title="No mentions yet"
-        hint="Sources haven't been polled. Once GDELT and the others run, mentions of “Lakepointe Church” and “Josh Howerton” land here, newest first."
-      />
+      <div>
+        {timeWindowRow}
+        <EmptyState
+          title="No mentions in this window"
+          hint="Sources haven't been polled, or nothing landed in the selected time range. Try a wider window, or “All.”"
+        />
+      </div>
     );
   }
 
   return (
     <div>
+      {timeWindowRow}
+
+      {truncatedSources.length > 0 && (
+        <p className="mb-2 text-[11px] text-lp-taupe/50">
+          Showing the most recent 1000 items in this window for:{" "}
+          {truncatedSources.map((s) => SOURCES.find((x) => x.id === s)?.label ?? s).join(", ")}.
+        </p>
+      )}
+
       <div className="mb-2 flex flex-wrap gap-2">
         <FilterPill
           label="All"
