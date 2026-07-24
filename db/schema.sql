@@ -13,14 +13,14 @@
 -- One row per discovered mention, deduped across runs.
 CREATE TABLE IF NOT EXISTS mention (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  source         text NOT NULL,          -- 'gdelt' | 'gdelt_watchlist' | 'reddit' | 'youtube' | 'google_news'
-  source_uid     text NOT NULL,          -- platform-native stable id (e.g. reddit fullname 't3_xxx')
-  url            text NOT NULL,
+  source         text NOT NULL,          -- 'gdelt' | 'gdelt_watchlist' | 'reddit' | 'youtube' | 'google_news' | 'manual_submission'
+  source_uid     text NOT NULL,          -- platform-native stable id (e.g. reddit fullname 't3_xxx'); a fresh uuid for manual rows
+  url            text,                   -- nullable (Slice 9): manual facebook-group entries may have no URL; note is required instead
   normalized_url text,                   -- canonicalized URL for cross-source duplicate grouping
   title          text,
-  excerpt        text,
+  excerpt        text,                   -- also doubles as the manual-entry "note" field (Slice 9)
   author         text,
-  query_matched  text NOT NULL,          -- which keyword (or 'watchlist') produced this row
+  query_matched  text NOT NULL,          -- which keyword (or 'watchlist') produced this row; 'manual' for manual rows (see topics)
   published_at   timestamptz,
   fetched_at     timestamptz NOT NULL DEFAULT now(),
   sentiment      text,                   -- NULL for v1 (deferred); kept for forward-compat
@@ -32,9 +32,19 @@ CREATE TABLE IF NOT EXISTS mention (
   -- are NEVER stored here — derived live via the entity_reputation JOIN in
   -- queries.ts, so reclassifying an entity retroactively changes visibility
   -- for all of its rows with zero backfill. Never delete rows — additive, auditable.
+  -- NOTE: this 'manual' means "manually excluded" (Slice 7) — distinct from
+  -- source = 'manual_submission' below, which means "manually added" (Slice 9).
+  -- Deliberately different tokens so the two meanings are never conflated.
   excluded_reason text,
   channel_id     text,                   -- Slice 6, youtube only: captured going forward; legacy rows have none
   domain         text,                   -- Slice 7, google_news only: publisher domain, for entity classification
+  -- Slice 9 (manual mention submission) — all nullable/default-false, unused
+  -- by every polled source:
+  source_detail       text,              -- which group / newsletter / show, staff-entered free text
+  manual_source_type  text,              -- 'facebook-group' | 'x' | 'newsletter' | 'news-article' | 'podcast' | 'other'
+  submitted_by         text,             -- staff name, honest attribution not auth
+  indirect             boolean NOT NULL DEFAULT false, -- true = content never names Lakepointe/Josh explicitly
+  topics                text[] NOT NULL DEFAULT '{}',  -- KeywordFilterId values; manual items support multiple
   UNIQUE (source, source_uid)
 );
 
@@ -46,6 +56,18 @@ ALTER TABLE mention ADD COLUMN IF NOT EXISTS subreddit text;
 ALTER TABLE mention ADD COLUMN IF NOT EXISTS excluded_reason text;
 ALTER TABLE mention ADD COLUMN IF NOT EXISTS channel_id text;
 ALTER TABLE mention ADD COLUMN IF NOT EXISTS domain text;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS source_detail text;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS manual_source_type text;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS submitted_by text;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS indirect boolean NOT NULL DEFAULT false;
+ALTER TABLE mention ADD COLUMN IF NOT EXISTS topics text[] NOT NULL DEFAULT '{}';
+-- Slice 9: manual facebook-group entries may have no URL (note required instead).
+ALTER TABLE mention ALTER COLUMN url DROP NOT NULL;
+
+ALTER TABLE mention DROP CONSTRAINT IF EXISTS mention_manual_source_type_check;
+ALTER TABLE mention ADD CONSTRAINT mention_manual_source_type_check
+  CHECK (manual_source_type IN ('facebook-group', 'x', 'newsletter', 'news-article', 'podcast', 'other')
+         OR manual_source_type IS NULL);
 
 -- Slice 7: one-time backfill of `domain` for pre-existing Google News rows,
 -- parsed from the "via {domain}" free text baked into `excerpt` (the only

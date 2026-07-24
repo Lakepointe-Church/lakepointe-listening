@@ -1,6 +1,7 @@
+import { randomUUID } from "crypto";
 import { neon } from "@neondatabase/serverless";
 import type { MentionInput } from "./pollers/types";
-import type { EntityClassification } from "./types";
+import type { EntityClassification, ManualSourceType } from "./types";
 import { normalizeUrl } from "./normalizeUrl";
 import { classifyObituary } from "./exclusions";
 import { heuristicClassification } from "./channelHeuristic";
@@ -60,6 +61,20 @@ export async function ensureSchema() {
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS excluded_reason text`;
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS channel_id text`;
   await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS domain text`;
+  // Slice 9 (manual mention submission) — all unused by polled sources.
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS source_detail text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS manual_source_type text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS submitted_by text`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS indirect boolean NOT NULL DEFAULT false`;
+  await sql`ALTER TABLE mention ADD COLUMN IF NOT EXISTS topics text[] NOT NULL DEFAULT '{}'`;
+  // Manual facebook-group entries may have no URL (note required instead).
+  await sql`ALTER TABLE mention ALTER COLUMN url DROP NOT NULL`;
+  await sql`ALTER TABLE mention DROP CONSTRAINT IF EXISTS mention_manual_source_type_check`;
+  await sql`
+    ALTER TABLE mention ADD CONSTRAINT mention_manual_source_type_check
+      CHECK (manual_source_type IN ('facebook-group', 'x', 'newsletter', 'news-article', 'podcast', 'other')
+             OR manual_source_type IS NULL)
+  `;
 
   // Slice 7: one-time backfill of `domain` for pre-existing Google News rows,
   // parsed from the "via {domain}" text baked into `excerpt` (the only place
@@ -225,6 +240,90 @@ async function seedNewEntities(rows: MentionInput[]): Promise<void> {
      ON CONFLICT (source, entity_key) DO NOTHING`,
     [titles, titles.map((t) => heuristicClassification(t))],
   );
+}
+
+/** Everything the "Add mention" form collects (Slice 9). */
+export type ManualMentionInput = {
+  url: string | null;
+  sourceType: ManualSourceType;
+  sourceDetail: string | null;
+  title: string;
+  topics: string[]; // KeywordFilterId values, at least one
+  contentDate: string; // ISO date (yyyy-mm-dd)
+  note: string | null;
+  indirect: boolean;
+  submittedBy: string | null;
+};
+
+/**
+ * Insert one staff-submitted mention (Slice 9). Distinct from insertMentions
+ * (the poller batch path) because there's no platform-native source_uid to
+ * dedup on — a fresh uuid stands in, so the UNIQUE (source, source_uid)
+ * constraint is satisfied trivially and every manual row is its own entity.
+ * URL-based duplicate warning is a separate, non-blocking check the API layer
+ * runs before this (see findMentionByNormalizedUrl) — this function always
+ * inserts.
+ *
+ * source = 'manual_submission' (never bare 'manual' — see the schema comment
+ * on excluded_reason for why that token is already taken). query_matched is
+ * kept NOT NULL-satisfying via a joined topics string; multi-topic filtering
+ * itself reads the `topics` array, not query_matched (see queries.ts).
+ * Manual rows never seed entity_reputation and are never obituary-classified
+ * (Phase 1.3: pre-filtered signal by definition).
+ */
+export async function insertManualMention(input: ManualMentionInput): Promise<string> {
+  const sql = getDb();
+  const id = randomUUID();
+
+  const rows = (await sql`
+    INSERT INTO mention (
+      id, source, source_uid, url, normalized_url, title, excerpt, author,
+      query_matched, published_at, source_detail, manual_source_type,
+      submitted_by, indirect, topics
+    ) VALUES (
+      ${id}, 'manual_submission', ${id}, ${input.url}, ${input.url ? normalizeUrl(input.url) : null},
+      ${input.title}, ${input.note}, null,
+      ${input.topics.join(", ")}, ${input.contentDate}, ${input.sourceDetail}, ${input.sourceType},
+      ${input.submittedBy}, ${input.indirect}, ${input.topics}
+    )
+    RETURNING id
+  `) as { id: string }[];
+
+  return rows[0].id;
+}
+
+export type DuplicateMentionMatch = { id: string; source: string; title: string | null };
+
+/** URL-duplication check (Slice 9, warn-don't-block) — first match by normalized URL, or null. */
+export async function findMentionByNormalizedUrl(url: string): Promise<DuplicateMentionMatch | null> {
+  const sql = getDb();
+  const normalized = normalizeUrl(url);
+  if (!normalized) return null;
+  const rows = (await sql`
+    SELECT id, source, title FROM mention WHERE normalized_url = ${normalized} LIMIT 1
+  `) as DuplicateMentionMatch[];
+  return rows[0] ?? null;
+}
+
+/** Post-hoc edit fields for a manual item (Slice 9, Phase 3.4) — polled items are immutable and never call this. */
+export type ManualMentionEdit = {
+  title: string;
+  note: string | null;
+  topics: string[];
+  sourceDetail: string | null;
+};
+
+export async function updateManualMention(id: string, edit: ManualMentionEdit): Promise<void> {
+  const sql = getDb();
+  await sql`
+    UPDATE mention
+    SET title = ${edit.title},
+        excerpt = ${edit.note},
+        topics = ${edit.topics},
+        query_matched = ${edit.topics.join(", ")},
+        source_detail = ${edit.sourceDetail}
+    WHERE id = ${id} AND source = 'manual_submission'
+  `;
 }
 
 /** Manual triage override — always wins over the ingest-time heuristic. */

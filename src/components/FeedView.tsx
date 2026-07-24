@@ -88,10 +88,16 @@ export default function FeedView({
     return c;
   }, [mentions]);
 
+  // Manual items carry multi-topic in `topics` (KeywordFilterId values)
+  // instead of the single-value `query_matched` every polled source uses —
+  // check both so one mention can count/match under multiple topic chips.
+  const matchesKeywordGroup = (m: Mention, f: { queryMatched: string[]; id: KeywordFilterId }) =>
+    f.queryMatched.includes(m.query_matched) || m.topics.includes(f.id);
+
   const keywordCounts = useMemo(() => {
     const c = new Map<KeywordFilterId, number>();
     for (const f of KEYWORD_FILTERS) {
-      c.set(f.id, mentions.filter((m) => f.queryMatched.includes(m.query_matched)).length);
+      c.set(f.id, mentions.filter((m) => matchesKeywordGroup(m, f)).length);
     }
     return c;
   }, [mentions]);
@@ -104,7 +110,7 @@ export default function FeedView({
   const keywordGroup = KEYWORD_FILTERS.find((f) => f.id === keyword);
   const matchesFilters = (m: Mention) =>
     (source === "all" || m.source === source) &&
-    (!keywordGroup || keywordGroup.queryMatched.includes(m.query_matched)) &&
+    (!keywordGroup || matchesKeywordGroup(m, keywordGroup)) &&
     (!attentionOnly || m.entity_classification === "commentary");
 
   const filtered = mentions.filter(matchesFilters);

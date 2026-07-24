@@ -26,10 +26,38 @@ const STATE_META: Record<
 export default function SourceTile({
   def,
   health,
+  manualCount,
 }: {
   def: SourceDef;
   health: SourceHealth | undefined;
+  /** Slice 9: item count for kind === "manual" tiles — no poll_run ever exists for these. */
+  manualCount?: number;
 }) {
+  if (def.kind === "manual") {
+    return (
+      <div className="rounded-xl border border-lp-taupe/15 bg-lp-surface p-5">
+        <div className="flex items-center justify-between">
+          <h3 className="font-medium text-white">{def.label}</h3>
+          <span className="rounded-full border border-lp-slate/40 px-2 py-0.5 text-[11px] uppercase tracking-wide text-lp-slate/80">
+            Manually monitored
+          </span>
+        </div>
+        <p className="mt-2 text-[13px] leading-snug text-lp-taupe/55">{def.blurb}</p>
+        <div className="mt-4 flex items-end justify-between border-t border-lp-taupe/10 pt-3">
+          <div>
+            <div className="text-2xl font-bold tabular-nums text-lp-orange">{manualCount ?? 0}</div>
+            <div className="text-[11px] uppercase tracking-wide text-lp-taupe/45">this week</div>
+          </div>
+          <div className="text-right text-[12px] text-lp-taupe/50">
+            <a href="/add" className="text-lp-orange hover:underline">
+              Add mention
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Sources with no free API path render as an explicit "not connected" tile —
   // visibly distinct, never faked.
   if (def.kind === "unavailable") {

@@ -1,5 +1,5 @@
-import { SOURCES } from "@/config/sources";
-import type { SourceHealth } from "@/lib/types";
+import { SOURCES, MANUAL_SOURCE_TYPES } from "@/config/sources";
+import type { SourceHealth, SummaryStats } from "@/lib/types";
 import SourceTile from "./SourceTile";
 
 /**
@@ -7,11 +7,18 @@ import SourceTile from "./SourceTile";
  * polled source must be obvious. Live sources first, then the "not connected"
  * placeholders.
  */
-export default function BySourceView({ health }: { health: SourceHealth[] }) {
+export default function BySourceView({
+  health,
+  summary,
+}: {
+  health: SourceHealth[];
+  summary: SummaryStats;
+}) {
   const byId = new Map(health.map((h) => [h.source, h]));
   const live = SOURCES.filter((s) => s.kind === "live");
   const degraded = SOURCES.filter((s) => s.kind === "degraded");
   const unavailable = SOURCES.filter((s) => s.kind === "unavailable");
+  const manualCounts = new Map(summary.byManualType.map((t) => [t.type, t.count]));
 
   return (
     <div className="space-y-8">
@@ -22,6 +29,28 @@ export default function BySourceView({ health }: { health: SourceHealth[] }) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {live.map((def) => (
             <SourceTile key={def.id} def={def} health={byId.get(def.id)} />
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-[12px] font-medium uppercase tracking-wide text-lp-taupe/55">
+          Manually monitored
+        </h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {MANUAL_SOURCE_TYPES.map((t) => (
+            <SourceTile
+              key={t.id}
+              def={{
+                id: t.id,
+                label: t.label,
+                kind: "manual",
+                blurb: `${t.label} — no automated path; staff-submitted via "Add mention."`,
+                slice: 9,
+              }}
+              health={undefined}
+              manualCount={manualCounts.get(t.id) ?? 0}
+            />
           ))}
         </div>
       </section>

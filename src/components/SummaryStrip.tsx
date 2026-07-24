@@ -1,7 +1,8 @@
 import type { SummaryStats } from "@/lib/types";
-import { SOURCES } from "@/config/sources";
+import { SOURCES, MANUAL_SOURCE_TYPES } from "@/config/sources";
 
 const SOURCE_LABEL = Object.fromEntries(SOURCES.map((s) => [s.id, s.label]));
+const MANUAL_TYPE_LABEL = Object.fromEntries(MANUAL_SOURCE_TYPES.map((t) => [t.id, t.label]));
 
 function trend(current: number, prior: number): string {
   if (current > prior) return "↑";
@@ -23,7 +24,11 @@ export default function SummaryStrip({
   summary: SummaryStats;
   onNeedsAttentionClick?: () => void;
 }) {
-  const { currentWeekTotal, priorWeekTotal, bySource, needsAttention } = summary;
+  const { currentWeekTotal, priorWeekTotal, bySource, needsAttention, byManualType } = summary;
+  // Slice 9: manual_submission's own row is replaced by its byManualType
+  // breakdown ("Facebook groups: 3" reads more meaningfully than one lumped
+  // "Manual submissions: N" — Phase 4.1's own stated lean).
+  const polledBySource = bySource.filter((s) => s.source !== "manual_submission");
 
   return (
     <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-lg border border-lp-taupe/15 bg-lp-surface/40 px-4 py-2.5 text-[12px] text-lp-taupe/70">
@@ -36,11 +41,21 @@ export default function SummaryStrip({
         </span>
       </span>
 
-      {bySource.length > 0 && (
+      {polledBySource.length > 0 && (
         <span className="flex flex-wrap items-center gap-x-3 text-lp-taupe/55">
-          {bySource.map(({ source, count }) => (
+          {polledBySource.map(({ source, count }) => (
             <span key={source}>
               {SOURCE_LABEL[source] ?? source} <span className="text-lp-taupe/40">{count}</span>
+            </span>
+          ))}
+        </span>
+      )}
+
+      {byManualType.length > 0 && (
+        <span className="flex flex-wrap items-center gap-x-3 text-lp-taupe/55">
+          {byManualType.map(({ type, count }) => (
+            <span key={type}>
+              {MANUAL_TYPE_LABEL[type] ?? type} <span className="text-lp-taupe/40">{count}</span>
             </span>
           ))}
         </span>

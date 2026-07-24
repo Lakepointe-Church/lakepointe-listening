@@ -2,13 +2,22 @@
 
 export type MentionStatus = "new" | "reviewed" | "dismissed";
 
+/** Slice 9: manual_source_type CHECK values — drives the source chip label on manual cards. */
+export type ManualSourceType =
+  | "facebook-group"
+  | "x"
+  | "newsletter"
+  | "news-article"
+  | "podcast"
+  | "other";
+
 export type Mention = {
   id: string;
   source: string;
   source_uid: string;
-  url: string;
+  url: string | null; // nullable (Slice 9): manual facebook-group entries may have no URL
   title: string | null;
-  excerpt: string | null;
+  excerpt: string | null; // also the manual-entry "note" (Slice 9)
   author: string | null;
   query_matched: string;
   published_at: string | null; // ISO
@@ -22,12 +31,20 @@ export type Mention = {
   // Entity-classification exclusions ('owned-entity' | 'reupload-entity' | 'wrong-entity')
   // are never stored — derived live via the entity_reputation JOIN in queries.ts, so
   // reclassifying an entity retroactively changes visibility with no backfill.
+  // NOTE: this 'manual' means "manually excluded" — distinct from source =
+  // 'manual_submission' below, which means "manually added" (Slice 9).
   excluded_reason: string | null;
   channel_id: string | null; // youtube only, captured going forward
   // Slice 7: raw entity_reputation classification (null = no row = unclassified
   // and not yet triaged), independent of whether it results in exclusion —
   // this is what the triage badge displays.
   entity_classification: EntityClassification | null;
+  // Slice 9 (manual mention submission) — null/empty for every polled source.
+  source_detail: string | null;
+  manual_source_type: ManualSourceType | null;
+  submitted_by: string | null;
+  indirect: boolean;
+  topics: string[]; // KeywordFilterId values; manual items only, supports multiple
 };
 
 /** Slice 7: generalized beyond YouTube channels to any (source, entity_key) pair. */
@@ -77,4 +94,8 @@ export type SummaryStats = {
   priorWeekTotal: number;
   bySource: { source: string; count: number }[]; // trailing 7 days
   needsAttention: number; // trailing 7 days, commentary-classified entities
+  // Slice 9: manual_submission's own count broken down by manual_source_type
+  // (e.g. "Facebook groups: 3") rather than lumped into one "Manual" bucket —
+  // trailing 7 days, same window as bySource.
+  byManualType: { type: ManualSourceType; count: number }[];
 };

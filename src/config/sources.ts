@@ -9,7 +9,7 @@
  * Pollers are wired in later slices; in Slice 1 every live source reads as
  * "not yet polled".
  */
-export type SourceKind = "live" | "degraded" | "unavailable";
+export type SourceKind = "live" | "degraded" | "unavailable" | "manual";
 
 export type SourceDef = {
   id: string; // matches mention.source / poll_run.source
@@ -72,23 +72,59 @@ export const SOURCES: SourceDef[] = [
     id: "x",
     label: "X / Twitter",
     kind: "unavailable",
-    blurb: "No free API path for mention search — not connected.",
+    // Copy updated Slice 9: this is no longer a dead end — staff cover the
+    // gap via "Add mention" (see the Manually monitored section above).
+    blurb: "No free API path for automated mention search. Monitored manually by staff — see Manually monitored.",
     slice: 5,
   },
   {
     id: "meta",
     label: "Meta",
     kind: "unavailable",
-    blurb: "Facebook / Instagram have no free mention search — not connected.",
+    blurb: "Facebook / Instagram have no free mention search. Monitored manually by staff — see Manually monitored.",
     slice: 5,
   },
   {
     id: "websearch",
     label: "Web Search",
     kind: "unavailable",
-    blurb: "No free API path — not connected. Google CSE closed to new projects.",
+    blurb: "No free API path — Google CSE closed to new projects. Not manually monitored.",
     slice: 5,
   },
+  {
+    id: "manual_submission",
+    label: "Manual submissions",
+    // Slice 9: staff-submitted items — private Facebook groups and indirect
+    // mentions no poller can ever reach. Not a poll-health tile (no
+    // poll_run is ever recorded for this source); the tile shows a volume
+    // count instead. See BySourceView for the "Manually monitored" section.
+    kind: "manual",
+    blurb: "Staff-submitted items from sources with no automated path — Facebook groups, X, newsletters, and more.",
+    slice: 9,
+  },
+];
+
+/**
+ * Slice 9: manual_source_type CHECK values, with the label each drives on
+ * the source chip and the source-detail field's adaptive prompt ("Which
+ * group?" / "Which newsletter?"). Single source of truth for the form
+ * picker, MentionCard chip, and the summary-strip byManualType breakdown.
+ */
+export const MANUAL_SOURCE_TYPES: {
+  id: "facebook-group" | "x" | "newsletter" | "news-article" | "podcast" | "other";
+  label: string;
+  detailLabel: string;
+  requiresUrl: boolean;
+  // Byline preposition on the card, e.g. "in Rockwall Word of Mouth" /
+  // "by Mary DeMuth's Substack" (Phase 3.1's own worked examples).
+  bylinePreposition: string;
+}[] = [
+  { id: "facebook-group", label: "Facebook group", detailLabel: "Which group?", requiresUrl: false, bylinePreposition: "in" },
+  { id: "x", label: "X", detailLabel: "Which account? (optional)", requiresUrl: true, bylinePreposition: "on" },
+  { id: "newsletter", label: "Newsletter", detailLabel: "Which newsletter?", requiresUrl: true, bylinePreposition: "by" },
+  { id: "news-article", label: "News article", detailLabel: "Which outlet? (optional)", requiresUrl: true, bylinePreposition: "via" },
+  { id: "podcast", label: "Podcast", detailLabel: "Which show?", requiresUrl: true, bylinePreposition: "on" },
+  { id: "other", label: "Other", detailLabel: "Source detail", requiresUrl: true, bylinePreposition: "via" },
 ];
 
 /**

@@ -59,7 +59,15 @@ export default function Dashboard({
             Howerton” across the open web.
           </p>
         </div>
-        <RefreshButton enabled={pollEnabled} />
+        <div className="flex items-center gap-2">
+          <a
+            href="/add"
+            className="rounded-lg border border-lp-orange/40 px-4 py-2 text-[13px] font-medium text-lp-orange transition hover:bg-lp-orange/10"
+          >
+            Add mention
+          </a>
+          <RefreshButton enabled={pollEnabled} />
+        </div>
       </header>
 
       <SourceStatusLine health={health} />
@@ -97,7 +105,7 @@ export default function Dashboard({
           onClearAttentionOnly={() => setAttentionOnly(false)}
         />
       )}
-      {tab === "bysource" && <BySourceView health={health} />}
+      {tab === "bysource" && <BySourceView health={health} summary={summary} />}
     </div>
   );
 }

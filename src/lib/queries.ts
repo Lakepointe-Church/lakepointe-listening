@@ -1,16 +1,23 @@
 import { ensureSchema, getDb, hasDb } from "./db";
-import { SOURCES } from "@/config/sources";
+import { SOURCES, MANUAL_SOURCE_TYPES } from "@/config/sources";
 import { windowSince, type WindowId } from "./timeWindow";
 import type {
   Mention,
+  ManualSourceType,
   PollRun,
   SourceHealth,
   SourceHealthState,
   SummaryStats,
 } from "./types";
 
-/** Postgres "undefined_table" — the one error the dashboard self-heals from. */
-const UNDEFINED_TABLE = "42P01";
+/**
+ * Postgres errors the dashboard self-heals from by (re-)running ensureSchema:
+ * "undefined_table" (fresh DB, no tables yet — pre-existing) and
+ * "undefined_column" (deployed code expects a column an additive migration
+ * hasn't added to this DB yet — Slice 9 needs this: production's first page
+ * load after a deploy otherwise races the first poll's ensureSchema() call).
+ */
+const SELF_HEALABLE_CODES = new Set(["42P01", "42703"]);
 
 /**
  * Safety cap per (source, included/excluded) partition — bounds payload size
@@ -54,7 +61,7 @@ export async function getDashboardData(windowId: WindowId = "7d"): Promise<{
         lastRun: null,
       })),
       truncatedSources: [],
-      summary: { currentWeekTotal: 0, priorWeekTotal: 0, bySource: [], needsAttention: 0 },
+      summary: { currentWeekTotal: 0, priorWeekTotal: 0, bySource: [], needsAttention: 0, byManualType: [] },
     };
   }
 
@@ -68,11 +75,12 @@ export async function getDashboardData(windowId: WindowId = "7d"): Promise<{
   try {
     rows = await readDashboard(windowSince(windowId));
   } catch (err) {
-    // Bootstrap: on a fresh database the tables don't exist until the first
-    // poll runs ensureSchema() — but the page renders (and 500s) before any
-    // poll can be triggered. Self-heal from exactly this condition and let
-    // every other error stay loud.
-    if ((err as { code?: string }).code !== UNDEFINED_TABLE) throw err;
+    // Bootstrap: on a fresh database the tables don't exist yet, or (Slice 9)
+    // a deploy shipped code expecting new columns before the first poll's
+    // ensureSchema() has added them — either way the page renders (and 500s)
+    // before a poll can run. Self-heal from exactly these two conditions and
+    // let every other error stay loud.
+    if (!SELF_HEALABLE_CODES.has((err as { code?: string }).code ?? "")) throw err;
     await ensureSchema();
     rows = await readDashboard(windowSince(windowId));
   }
@@ -126,7 +134,8 @@ async function readDashboard(since: Date | null): Promise<{
     SELECT id, source, source_uid, url, title, excerpt, author,
            query_matched, published_at, fetched_at, sentiment, status,
            title_match, subreddit, channel_id, domain, excluded_reason,
-           entity_classification, partition_total
+           entity_classification, partition_total,
+           source_detail, manual_source_type, submitted_by, indirect, topics
     FROM (
       SELECT scored.*, ROW_NUMBER() OVER (
         PARTITION BY scored.source, (scored.excluded_reason IS NULL)
@@ -139,6 +148,7 @@ async function readDashboard(since: Date | null): Promise<{
         SELECT m.id, m.source, m.source_uid, m.url, m.title, m.excerpt, m.author,
                m.query_matched, m.published_at, m.fetched_at, m.sentiment, m.status,
                m.title_match, m.subreddit, m.channel_id, m.domain,
+               m.source_detail, m.manual_source_type, m.submitted_by, m.indirect, m.topics,
                er.classification AS entity_classification,
                COALESCE(
                  m.excluded_reason,
@@ -195,11 +205,11 @@ async function readSummaryStats(): Promise<SummaryStats> {
   const sql = getDb();
 
   const rows = (await sql`
-    SELECT source, entity_classification,
+    SELECT source, entity_classification, manual_source_type,
            COUNT(*) FILTER (WHERE occurred_at >= now() - interval '7 days')  AS current_week,
            COUNT(*) FILTER (WHERE occurred_at <  now() - interval '7 days') AS prior_week
     FROM (
-      SELECT m.source,
+      SELECT m.source, m.manual_source_type,
              COALESCE(m.published_at, m.fetched_at) AS occurred_at,
              er.classification AS entity_classification,
              COALESCE(
@@ -218,13 +228,20 @@ async function readSummaryStats(): Promise<SummaryStats> {
       WHERE COALESCE(m.published_at, m.fetched_at) >= now() - interval '14 days'
     ) scored
     WHERE excluded_reason IS NULL
-    GROUP BY source, entity_classification
-  `) as { source: string; entity_classification: string | null; current_week: string; prior_week: string }[];
+    GROUP BY source, entity_classification, manual_source_type
+  `) as {
+    source: string;
+    entity_classification: string | null;
+    manual_source_type: ManualSourceType | null;
+    current_week: string;
+    prior_week: string;
+  }[];
 
   let currentWeekTotal = 0;
   let priorWeekTotal = 0;
   let needsAttention = 0;
   const bySourceMap = new Map<string, number>();
+  const byManualTypeMap = new Map<ManualSourceType, number>();
 
   for (const r of rows) {
     const current = Number(r.current_week);
@@ -233,12 +250,22 @@ async function readSummaryStats(): Promise<SummaryStats> {
     priorWeekTotal += prior;
     bySourceMap.set(r.source, (bySourceMap.get(r.source) ?? 0) + current);
     if (r.entity_classification === "commentary") needsAttention += current;
+    if (r.source === "manual_submission" && r.manual_source_type) {
+      byManualTypeMap.set(
+        r.manual_source_type,
+        (byManualTypeMap.get(r.manual_source_type) ?? 0) + current,
+      );
+    }
   }
 
   const bySource = SOURCES.filter((s) => bySourceMap.has(s.id)).map((s) => ({
     source: s.id,
     count: bySourceMap.get(s.id) ?? 0,
   }));
+  const byManualType = MANUAL_SOURCE_TYPES.filter((t) => byManualTypeMap.has(t.id)).map((t) => ({
+    type: t.id,
+    count: byManualTypeMap.get(t.id) ?? 0,
+  }));
 
-  return { currentWeekTotal, priorWeekTotal, bySource, needsAttention };
+  return { currentWeekTotal, priorWeekTotal, bySource, needsAttention, byManualType };
 }
